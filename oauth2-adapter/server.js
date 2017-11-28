@@ -46,6 +46,8 @@ app.post("/oauth2/token", (req, res) => {
 		var clientId = req.body.client_id;
 		var clientSecret = req.body.client_secret;
   }
+
+  // handle code grant and token refresh from this endpoint...
   
   console.log('proxying token post:');
   console.log(`  client_id: ${clientId}`);
