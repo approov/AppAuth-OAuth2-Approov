@@ -23,6 +23,7 @@ import net.openid.appauth.AuthorizationServiceConfiguration;
 import net.openid.appauth.AuthorizationServiceDiscovery;
 import net.openid.appauth.ResponseTypeValues;
 import net.openid.appauth.TokenResponse;
+import net.openid.appauth.connectivity.ConnectionBuilder;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -72,6 +73,8 @@ public class AuthRepo {
     String redirectUri;
     String authScope;
 
+    ConnectionBuilder connectionBuilder;
+
     public AuthRepo(BooksApp app) {
         this.app = app;
 
@@ -80,7 +83,10 @@ public class AuthRepo {
         loginListener = null;
         logoutListener = null;
 
+        connectionBuilder = new SignedConnectionBuilder(app.getAssets());
+
         AppAuthConfiguration.Builder builder = new AppAuthConfiguration.Builder();
+        builder.setConnectionBuilder(connectionBuilder);
         authService = new AuthorizationService(app, builder.build());
         authState = null;
         userInfoUrl = null;
@@ -153,7 +159,8 @@ public class AuthRepo {
             Uri discoveryUri = Uri.parse(discoveryEndpoint);
             loginListener.onEvent(AuthRepo.this, AUTH_SERVICE_DISCOVERY_START);
 
-            AuthorizationServiceConfiguration.fetchFromUrl(discoveryUri, this::finishServiceDiscovery);
+            Log.i(TAG, "  at " + discoveryUri);
+            AuthorizationServiceConfiguration.fetchFromUrl(discoveryUri, this::finishServiceDiscovery, connectionBuilder);
         }
     }
 

@@ -1,22 +1,48 @@
+const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const express = require('express');
-const axios = require('axios');
 const bodyParser = require('body-parser');
+const axios = require('axios');
 
 const config = require('./config');
-const secrets = require('./secrets');
 
-const port = config.serverPort || 3000
+const httpPort = config.httpPort || 3000
+const httpsPort = config.httpsPort || 3001
 
 var app = express();
+
+const options = {
+  cert: fs.readFileSync(__dirname + config.publicCert),
+  key: fs.readFileSync(__dirname + config.privateKey)
+};
+
+// redirect http to https
+
+// app.use(function(req, res, next) {
+//   if (req.secure) {
+//       next();
+//   } else {
+//       let host = req.headers.host.replace(new RegExp(`:${httpPort}`, 'g'), `:${httpsPort}`);
+//       res.redirect(`https://${host}${req.url}`);
+//   }
+// });
+
+// parse bodies
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); // support form-encoded bodies (for the token endpoint)
 
+// adapt google discovery doc
+
 app.get('/.well-known/openid-configuration', (req, res) => {
   axios.get(config.googleDiscoveryUrl)
-    .then(response => {
+    .then(response => { 
       var doc = response.data;
-      doc.token_endpoint = `http://localhost:${port}/oauth2/token`;
+
+      // push adapter as token endpoint
+      doc.token_endpoint = `https://10.0.2.2:${httpsPort}/oauth2/token`;
+
       res.send(JSON.stringify(doc, undefined, 2));
     })
     .catch(error => {
@@ -24,7 +50,10 @@ app.get('/.well-known/openid-configuration', (req, res) => {
     });
 });
 
-app.post("/oauth2/token", (req, res) => {
+// adapt token endpoint
+
+app.post('/oauth2/token', (req, res) => {
+  console.log('oauth2/token');
 	
 	var auth = req.headers['authorization'];
 	if (auth) {
@@ -47,18 +76,35 @@ app.post("/oauth2/token", (req, res) => {
 		var clientSecret = req.body.client_secret;
   }
 
+  let headers = Object.assign({}, req.headers);
+  delete headers["content-length"];
+
+  let encodedBody = Object.keys(req.body).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(req.body[k])}`).join('&');
+
   // handle code grant and token refresh from this endpoint...
   
   console.log('proxying token post:');
   console.log(`  client_id: ${clientId}`);
   console.log(`  client_secret: ${clientSecret}`);
   console.log(`  body: ${JSON.stringify(req.body, undefined, 2)}`);
+  console.log(`  body: ${encodedBody}`);
+  console.log(`  headers: ${JSON.stringify(req.headers, undefined, 2)}`);
+  console.log(`  headers: ${JSON.stringify(headers, undefined, 2)}`);
 
-  res.send('proxying post...');
+  axios.post(config.googleTokenEndpoint, encodedBody)
+  .then(response => { 
+    res.send(response.data);
+  })
+  .catch(error => {
+    console.log(error);
+  });
 });
 
-app.listen(3000, () => {
-  console.log(`Server is up on port ${port}`);
-});
+// start server
+
+http.createServer(app).listen(httpPort);
+https.createServer(options, app).listen(httpsPort);
+
+console.log(`Server listening on ports ${httpPort} & ${httpsPort}`);
 
 // end of file
