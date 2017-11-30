@@ -16,6 +16,11 @@ import com.criticalblue.auth.demo.auth.AuthRepo;
 import com.criticalblue.auth.demo.books.BooksRepo;
 import com.google.common.io.BaseEncoding;
 
+import com.criticalblue.attestationlibrary.ApproovAttestation;
+import com.criticalblue.attestationlibrary.ApproovConfig;
+import com.criticalblue.attestationlibrary.TokenInterface;
+
+import java.net.MalformedURLException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -40,6 +45,20 @@ public class BooksApp extends Application {
 
         booksRepo = new BooksRepo(this, authRepo);
         Log.i(TAG, "Books service created");
+
+        // Initialize the Approov SDK
+        try {
+            // Creates the configuration object for the Approov SDK based
+            // on the Android application context
+            ApproovConfig config =
+                    ApproovConfig.getDefaultConfig(this.getApplicationContext());
+            ApproovAttestation.initialize(config);
+        } catch (IllegalArgumentException ex) {
+            Log.e(TAG, ex.getMessage());
+        } catch (MalformedURLException ex) {
+            Log.e(TAG, ex.getMessage());
+        }
+
     }
 
     public AuthRepo getAuthRepo() {

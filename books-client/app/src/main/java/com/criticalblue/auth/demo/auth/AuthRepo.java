@@ -513,4 +513,30 @@ public class AuthRepo {
             }
         };
     }
+
+//    public Interceptor getApproovTokenInterceptor() {
+//        return new Interceptor() {
+//            @Override
+//            public okhttp3.Response intercept(Chain chain) throws IOException {
+//                Request request = chain.request();
+//
+//                // ensure token request made off UI thread
+//
+//                TokenInterface.ApproovResults approovResults =
+//                        ApproovAttestation.shared().fetchApproovTokenAndWait(null);
+//                String token;
+//                if (approovResults.getResult() == ApproovAttestation.AttestationResult.SUCCESS) {
+//                    token = approovResults.getToken();
+//                } else {
+//                    token = "NOTOKEN";
+//                }
+//
+//                request = request.newBuilder().addHeader("approov", token).build();
+//
+//                Log.i(TAG, "token: " + getAccessToken());
+//
+//                return chain.proceed(request);
+//            }
+//        };
+//    }
 }
