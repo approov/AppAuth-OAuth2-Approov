@@ -17,16 +17,18 @@ const options = {
   key: fs.readFileSync(__dirname + config.privateKey)
 };
 
+var googleTokenEndpoint = config.googleTokenEndpoint;
+
 // redirect http to https
 
-// app.use(function(req, res, next) {
-//   if (req.secure) {
-//       next();
-//   } else {
-//       let host = req.headers.host.replace(new RegExp(`:${httpPort}`, 'g'), `:${httpsPort}`);
-//       res.redirect(`https://${host}${req.url}`);
-//   }
-// });
+app.use(function(req, res, next) {
+  if (req.secure) {
+      next();
+  } else {
+      let host = req.headers.host.replace(new RegExp(`:${httpPort}`, 'g'), `:${httpsPort}`);
+      res.redirect(`https://${host}${req.url}`);
+  }
+});
 
 // parse bodies
 
@@ -40,7 +42,10 @@ app.get('/.well-known/openid-configuration', (req, res) => {
     .then(response => { 
       var doc = response.data;
 
-      // push adapter as token endpoint
+      // update google token endpoint 
+      if (doc.token_endpoint) googleTokenEndpoint = doc.googleTokenEndpoint;
+      
+      // replace adapter as token endpoint
       doc.token_endpoint = `https://10.0.2.2:${httpsPort}/oauth2/token`;
 
       res.send(JSON.stringify(doc, undefined, 2));
@@ -76,13 +81,15 @@ app.post('/oauth2/token', (req, res) => {
 		var clientSecret = req.body.client_secret;
   }
 
+  // adapt the headers...
+
   let headers = Object.assign({}, req.headers);
   delete headers["content-length"];
 
+  // reencode body
+
   let encodedBody = Object.keys(req.body).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(req.body[k])}`).join('&');
 
-  // handle code grant and token refresh from this endpoint...
-  
   console.log('proxying token post:');
   console.log(`  client_id: ${clientId}`);
   console.log(`  client_secret: ${clientSecret}`);
@@ -90,6 +97,8 @@ app.post('/oauth2/token', (req, res) => {
   console.log(`  body: ${encodedBody}`);
   console.log(`  headers: ${JSON.stringify(req.headers, undefined, 2)}`);
   console.log(`  headers: ${JSON.stringify(headers, undefined, 2)}`);
+
+  // post to actual google token endpoint
 
   axios.post(config.googleTokenEndpoint, encodedBody)
   .then(response => { 
