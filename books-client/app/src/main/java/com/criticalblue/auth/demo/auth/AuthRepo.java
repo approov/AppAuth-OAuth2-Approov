@@ -8,6 +8,8 @@ import android.support.customtabs.CustomTabsIntent;
 import android.util.Log;
 import android.webkit.URLUtil;
 
+import com.criticalblue.attestationlibrary.ApproovAttestation;
+import com.criticalblue.attestationlibrary.TokenInterface;
 import com.criticalblue.auth.demo.BooksApp;
 import com.criticalblue.auth.demo.R;
 import com.google.gson.Gson;
@@ -21,6 +23,9 @@ import net.openid.appauth.AuthorizationResponse;
 import net.openid.appauth.AuthorizationService;
 import net.openid.appauth.AuthorizationServiceConfiguration;
 import net.openid.appauth.AuthorizationServiceDiscovery;
+import net.openid.appauth.ClientAuthentication;
+import net.openid.appauth.ClientSecretBasic;
+import net.openid.appauth.ClientSecretPost;
 import net.openid.appauth.ResponseTypeValues;
 import net.openid.appauth.TokenResponse;
 import net.openid.appauth.connectivity.ConnectionBuilder;
@@ -263,6 +268,39 @@ public class AuthRepo {
 
         loginListener.onEvent(AuthRepo.this, AUTH_USER_AUTH_FINISH);
 
+        startApproovCheck();
+    }
+
+    private void startApproovCheck() {
+        Log.i(TAG, "Starting Approov check");
+
+        ApproovAttestation.shared().fetchApproovToken(new ApproovTokenFetcher(), null);
+    }
+
+    private String approovToken = "BAD";
+
+    public class ApproovTokenFetcher implements TokenInterface {
+
+        ApproovTokenFetcher() { /* EMPTY */ }
+
+        public void approovTokenFetchResult(final ApproovResults approovResults) {
+
+            ApproovAttestation.AttestationResult result = approovResults.getResult();
+            approovToken = approovResults.getToken();
+            Log.i(TAG, "Approov token = \"" + approovToken + "\"");
+
+            if (result == ApproovAttestation.AttestationResult.SUCCESS){
+                finishApproovCheck();
+            } else if (result == ApproovAttestation.AttestationResult.FAILURE){
+                failLogin(new AuthException("Approov checking failed"));
+                return;
+            }
+        }
+    }
+
+    private void finishApproovCheck() {
+        Log.i(TAG, "Finishing Approov check");
+
         startCodeExchange();
     }
 
@@ -272,8 +310,14 @@ public class AuthRepo {
         loginListener.onEvent(AuthRepo.this, AUTH_CODE_EXCHANGE_START);
 
         AuthorizationResponse resp = authState.getLastAuthorizationResponse();
+
+        // use Approov token as secret
+
+        ClientAuthentication clientAuth = new ClientSecretPost(approovToken);
+        approovToken="BAD";
+
         authService.performTokenRequest(
-                resp.createTokenExchangeRequest(), this::onTokenRequestCompleted);
+                resp.createTokenExchangeRequest(), clientAuth, this::onTokenRequestCompleted);
     }
 
     private void onTokenRequestCompleted(TokenResponse resp, AuthorizationException ex) {
@@ -513,4 +557,30 @@ public class AuthRepo {
             }
         };
     }
+
+//    public Interceptor getApproovTokenInterceptor() {
+//        return new Interceptor() {
+//            @Override
+//            public okhttp3.Response intercept(Chain chain) throws IOException {
+//                Request request = chain.request();
+//
+//                // ensure token request made off UI thread
+//
+//                TokenInterface.ApproovResults approovResults =
+//                        ApproovAttestation.shared().fetchApproovTokenAndWait(null);
+//                String token;
+//                if (approovResults.getResult() == ApproovAttestation.AttestationResult.SUCCESS) {
+//                    token = approovResults.getToken();
+//                } else {
+//                    token = "NOTOKEN";
+//                }
+//
+//                request = request.newBuilder().addHeader("approov", token).build();
+//
+//                Log.i(TAG, "token: " + getAccessToken());
+//
+//                return chain.proceed(request);
+//            }
+//        };
+//    }
 }

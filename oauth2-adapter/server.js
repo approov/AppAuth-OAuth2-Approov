@@ -1,11 +1,15 @@
+const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const express = require('express');
 const bodyParser = require('body-parser');
+const querystring = require('querystring');
 const axios = require('axios');
+const chalk = require('chalk');
 
 const config = require('./config');
+const approov = require(`${__dirname}/approov`);
 
 const httpPort = config.httpPort || 3000
 const httpsPort = config.httpsPort || 3001
@@ -19,6 +23,14 @@ const options = {
 
 var googleTokenEndpoint = config.googleTokenEndpoint;
 
+function log_req(req) {
+  console.log(chalk.cyan(`Request: ${JSON.stringify({
+    originalUrl: req.originalUrl,
+    params: req.params,
+    headers: req.headers,
+  }, null, '  ')}`));
+}
+
 // redirect http to https
 
 app.use(function(req, res, next) {
@@ -29,6 +41,13 @@ app.use(function(req, res, next) {
       res.redirect(`https://${host}${req.url}`);
   }
 });
+
+// check approov token
+
+if (config.approov_header  == null) {
+  throw new Error(`approov_header not found; please set in ${__dirname}/config.js`);
+}
+const approovHdr = config.approov_header;
 
 // parse bodies
 
@@ -59,6 +78,7 @@ app.get('/.well-known/openid-configuration', (req, res) => {
 
 app.post('/oauth2/token', (req, res) => {
   console.log('oauth2/token');
+  //log_req(req);
 	
 	var auth = req.headers['authorization'];
 	if (auth) {
@@ -66,26 +86,44 @@ app.post('/oauth2/token', (req, res) => {
 		var clientCredentials = new Buffer(auth.slice('basic '.length), 'base64').toString().split(':');
 		var clientId = querystring.unescape(clientCredentials[0]);
 		var clientSecret = querystring.unescape(clientCredentials[1]);
-	}
-	
-	// otherwise, check the post body
-	if (req.body.client_id) {
-		if (clientId) {
-			// if we've already seen the client's credentials in the authorization header, this is an error
-			console.log('Client attempted to authenticate with multiple methods');
-			res.status(401).json({error: 'invalid_client'});
-			return;
-		}
-		
+  
+    if (req.body.client_id) {
+      console.log(chalk.red('Client attempted to authenticate with multiple methods'));
+      res.status(401).json({error: 'overauthorized'});
+      return;
+    }
+
+    delete RegExp.body['authorization'];
+  } else if (req.body.client_id) {
 		var clientId = req.body.client_id;
 		var clientSecret = req.body.client_secret;
+    delete req.body.client_secret;
   }
+
+  if (!(clientId && clientSecret)) {
+    console.log(chalk.red('Client missing id or secret'));
+    res.status(401).json({error: 'unauthoried'});
+    return;
+  }
+  
+  // check approov token
+
+  if (!approov.isValid(clientSecret)) {
+    console.log(chalk.red('Unauthorized: invalid Approov token'));
+    res.status(401).send('Unauthorized');
+    return;
+  }
+
+  // adapt the headers and body
 
   // adapt the headers...
 
   let headers = Object.assign({}, req.headers);
   delete headers["content-length"];
 
+  req.body.client_id = clientId;
+  //req.body.client_secret = "ACTUAL_OAUTH2_SECRET";
+  
   // reencode body
 
   let encodedBody = Object.keys(req.body).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(req.body[k])}`).join('&');
@@ -105,7 +143,7 @@ app.post('/oauth2/token', (req, res) => {
     res.send(response.data);
   })
   .catch(error => {
-    console.log(error);
+    console.log('error');
   });
 });
 
