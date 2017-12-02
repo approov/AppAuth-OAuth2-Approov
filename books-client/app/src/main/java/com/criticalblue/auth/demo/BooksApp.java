@@ -46,19 +46,20 @@ public class BooksApp extends Application {
         booksRepo = new BooksRepo(this, authRepo);
         Log.i(TAG, "Books service created");
 
-        // Initialize the Approov SDK
+        boolean ok = false;
         try {
             // Creates the configuration object for the Approov SDK based
             // on the Android application context
             ApproovConfig config =
                     ApproovConfig.getDefaultConfig(this.getApplicationContext());
             ApproovAttestation.initialize(config);
+            ok = true;
         } catch (IllegalArgumentException ex) {
             Log.e(TAG, ex.getMessage());
         } catch (MalformedURLException ex) {
             Log.e(TAG, ex.getMessage());
         }
-
+        Log.i(TAG, ok? "Approov SDK initialized" : "Approov SDK failed to initialize");
     }
 
     public AuthRepo getAuthRepo() {

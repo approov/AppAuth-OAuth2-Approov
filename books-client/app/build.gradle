@@ -13,16 +13,6 @@ if (!keystoreFile.exists()) {
     throw new GradleException("${keystore} file not found!")
 }
 
-allprojects {
-    repositories {
-        jcenter()
-        google()
-        flatDir {
-            dirs 'libs'
-        }
-    }
-}
-
 android {
     compileSdkVersion 26
     buildToolsVersion "26.0.2"
@@ -120,5 +110,5 @@ dependencies {
     implementation 'com.squareup.retrofit2:retrofit:2.3.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.3.0'
     implementation 'com.squareup.picasso:picasso:2.5.2'
-    implementation(name: 'approov', ext: 'aar')
+    implementation project(':approov')
 }
