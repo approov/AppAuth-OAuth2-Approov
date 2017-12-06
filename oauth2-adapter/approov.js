@@ -17,20 +17,17 @@
 const path = require('path');
 const url = require('url');
 const jwt = require('jsonwebtoken');
-//const request = require('request');
 const chalk = require('chalk');
 
-// load approov config and secrets
+const config = require(`${__dirname}/config/config`);
+const secrets = require(`${__dirname}/config/secrets`);
 
-const secrets = require(`${__dirname}/secrets.js`);
 
 if (secrets.approov_token_secret == null) {
   throw new Error(`approov_token_secret not found; please set in ${__dirname}/secrets.js`);
 }
 const sigkey = Buffer.from(secrets.approov_token_secret, 'base64');
 const extraChecks = { algorithms: ['HS256'] };
-
-const config = require(`${__dirname}/config.js`);
 
 var enforceApproov = true;
 if (config.approov_enforcement == null) {

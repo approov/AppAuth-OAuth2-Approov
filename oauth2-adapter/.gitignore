@@ -1,6 +1,3 @@
-# secrets
-secrets/*
-
 # Logs
 logs
 *.log
@@ -59,5 +56,9 @@ typings/
 
 # dotenv environment variables file
 .env
+
+#secrets
+secrets.js
+*.pem
 
 # end of file

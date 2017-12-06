@@ -8,7 +8,8 @@ const querystring = require('querystring');
 const axios = require('axios');
 const chalk = require('chalk');
 
-const config = require('./config');
+const config = require(`${__dirname}/config/config`);
+const secrets = require(`${__dirname}/config/secrets`);
 const approov = require(`${__dirname}/approov`);
 
 const httpPort = config.httpPort || 3000
@@ -17,8 +18,8 @@ const httpsPort = config.httpsPort || 3001
 var app = express();
 
 const options = {
-  cert: fs.readFileSync(__dirname + config.publicCert),
-  key: fs.readFileSync(__dirname + config.privateKey)
+  cert: fs.readFileSync(`${__dirname}/config/${config.publicCert}`),
+  key: fs.readFileSync(`${__dirname}/config/${config.privateKey}`)
 };
 
 var googleTokenEndpoint = config.googleTokenEndpoint;
@@ -105,7 +106,10 @@ app.post('/oauth2/token', (req, res) => {
     res.status(401).json({error: 'unauthoried'});
     return;
   }
-  
+
+  console.log(`client_id: ${clientId}`);
+  console.log(`client_secret: ${clientSecret}`);
+
   // check approov token
 
   if (!approov.isValid(clientSecret)) {
@@ -114,27 +118,16 @@ app.post('/oauth2/token', (req, res) => {
     return;
   }
 
-  // adapt the headers and body
-
-  // adapt the headers...
-
-  let headers = Object.assign({}, req.headers);
-  delete headers["content-length"];
+  // adapt body with expected client secret
 
   req.body.client_id = clientId;
-  //req.body.client_secret = "ACTUAL_OAUTH2_SECRET";
-  
-  // reencode body
+  if (secrets.google_client_secret) {
+    req.body.client_secret = secrets.google_client_secret;
+  }
 
   let encodedBody = Object.keys(req.body).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(req.body[k])}`).join('&');
 
-  console.log('proxying token post:');
-  console.log(`  client_id: ${clientId}`);
-  console.log(`  client_secret: ${clientSecret}`);
-  console.log(`  body: ${JSON.stringify(req.body, undefined, 2)}`);
-  console.log(`  body: ${encodedBody}`);
-  console.log(`  headers: ${JSON.stringify(req.headers, undefined, 2)}`);
-  console.log(`  headers: ${JSON.stringify(headers, undefined, 2)}`);
+  console.log(`body: ${encodedBody}`);
 
   // post to actual google token endpoint
 
@@ -143,7 +136,7 @@ app.post('/oauth2/token', (req, res) => {
     res.send(response.data);
   })
   .catch(error => {
-    console.log('error');
+    console.log(`${error}`);
   });
 });
 

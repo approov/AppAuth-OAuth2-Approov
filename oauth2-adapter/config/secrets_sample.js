@@ -26,7 +26,8 @@
 module.exports = {
     approov_token_secret: /* token secret received from Approov demo download */
         'APPROOV DEMO TOKEN SECRET BASE64 STRING HERE',
-  };
-  
-  // end of file
-  
+    google_client_secret: /* client secret received from Google */
+        'GOOGLE CLIENT SECRET HERE'
+};
+
+// end of file

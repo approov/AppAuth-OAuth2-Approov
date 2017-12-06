@@ -5,9 +5,9 @@ module.exports = {
         3001,
 
     publicCert:           /* self-signed public certificate */
-        '/secrets/cert.pem',
+        'cert.pem',
     privateKey:           /* self-signed private key */
-        '/secrets/key.pem',
+        'key.pem',
 
     googleDiscoveryUrl:   /* google identity platform discovery document url */
         'https://accounts.google.com/.well-known/openid-configuration',
