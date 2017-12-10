@@ -28,8 +28,10 @@ android {
 
         // Used to identify activity handling the redirect
         manifestPlaceholders = [
-                //'appAuthRedirectScheme': "com.googleusercontent.apps.708887469285-c07sqh3rgg9ke8tho0hgbfb79sde7394"
-                'appAuthRedirectScheme': ''
+                'appAuthRedirectScheme': '',
+                'redirect_scheme': redirectScheme,
+                'redirect_host': redirectHost,
+                'redirect_path': redirectPath
         ]
     }
 

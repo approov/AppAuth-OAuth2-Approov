@@ -30,10 +30,9 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="com.googleusercontent.apps.708887469285-c07sqh3rgg9ke8tho0hgbfb79sde7394"/>
-                <!--<data android:scheme="https"
-                    android:host="android.example.com"
-                    android:path="/oauth2redirect"/>-->
+                <data android:scheme="${redirect_scheme}"
+                    android:host="${redirect_host}"
+                    android:path="${redirect_path}"/>
             </intent-filter>
         </activity>
 
