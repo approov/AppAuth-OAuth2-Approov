@@ -1,0 +1,25 @@
+{
+  "name": "oauth2-approov-adapter",
+  "version": "1.0.0",
+  "description": "Adapts OAuth2 protocol to use Approov client attestation rather than vulnerable client secret",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "OAuth2",
+    "Approov",
+    "OpenID-Connect",
+    "OIDC",
+    "Mobile",
+    "Android"
+  ],
+  "author": "Skip Hovsmith",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "axios": "^0.17.1",
+    "chalk": "^2.3.0",
+    "express": "^4.16.2",
+    "jsonwebtoken": "^8.1.0"
+  }
+}
