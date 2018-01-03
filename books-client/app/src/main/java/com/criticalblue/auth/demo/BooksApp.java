@@ -52,6 +52,7 @@ public class BooksApp extends Application {
             // on the Android application context
             ApproovConfig config =
                     ApproovConfig.getDefaultConfig(this.getApplicationContext());
+            config.setCustomerName("Demo");
             ApproovAttestation.initialize(config);
             ok = true;
         } catch (IllegalArgumentException ex) {

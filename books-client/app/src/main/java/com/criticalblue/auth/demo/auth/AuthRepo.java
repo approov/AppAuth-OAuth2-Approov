@@ -274,7 +274,9 @@ public class AuthRepo {
     private void startApproovCheck() {
         Log.i(TAG, "Starting Approov check");
 
-        ApproovAttestation.shared().fetchApproovToken(new ApproovTokenFetcher(), null);
+        ApproovAttestation.shared().fetchApproovToken(new ApproovTokenFetcher(),
+                "www.googleapis.com"); // checking google api domain rather than
+                                          // self-signed oauth2 adapter
     }
 
     private String approovToken = "BAD";
@@ -557,30 +559,4 @@ public class AuthRepo {
             }
         };
     }
-
-//    public Interceptor getApproovTokenInterceptor() {
-//        return new Interceptor() {
-//            @Override
-//            public okhttp3.Response intercept(Chain chain) throws IOException {
-//                Request request = chain.request();
-//
-//                // ensure token request made off UI thread
-//
-//                TokenInterface.ApproovResults approovResults =
-//                        ApproovAttestation.shared().fetchApproovTokenAndWait(null);
-//                String token;
-//                if (approovResults.getResult() == ApproovAttestation.AttestationResult.SUCCESS) {
-//                    token = approovResults.getToken();
-//                } else {
-//                    token = "NOTOKEN";
-//                }
-//
-//                request = request.newBuilder().addHeader("approov", token).build();
-//
-//                Log.i(TAG, "token: " + getAccessToken());
-//
-//                return chain.proceed(request);
-//            }
-//        };
-//    }
 }
