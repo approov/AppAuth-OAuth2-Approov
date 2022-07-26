@@ -1,24 +1,34 @@
-module.exports = {
-    httpPort:             /* adapter's http port */
-        3000,
-    httpsPort:            /* adapter's https port */
-        3001,
+const dotenv = require('dotenv').config()
 
-    adapterHost:          /* adapter's hostname or address */
-        '10.0.2.2',
+if (dotenv.error) {
+  throw dotenv.error
+}
 
-    publicCert:           /* self-signed public certificate */
-        'cert.pem',
-    privateKey:           /* self-signed private key */
-        'key.pem',
-        
-    googleDiscoveryUrl:   /* google identity platform discovery document url */
-        'https://accounts.google.com/.well-known/openid-configuration',
-    googleTokenEndpoint:  /* google identity platform token endpoint url */
-        'https://www.googleapis.com/oauth2/v4/token',
+const config = {
+    http_port: dotenv.parsed.HTTP_PORT,
+    domain: dotenv.parsed.DOMAIN,
 
-    approov_header:       /* Approov header name */
-        'authorization',
-    approov_enforcement:  /* set true to enforce token checks */
-        false,
-};
+    google_discovery_url: dotenv.parsed.GOOGLE_DISCOVERY_URL,
+    google_token_endpoint: dotenv.parsed.GOOGLE_TOKEN_ENDPOINT,
+    google_client_secret: dotenv.parsed.GOOGLE_CLIENT_SECRET,
+
+    approov_base64_secret: dotenv.parsed.APPROOV_TOKEN_BASE64_SECRET,
+    approov_enforcement: dotenv.parsed.APPROOV_ENFORCEMENT || true,
+}
+
+let missing_env_vars = ""
+
+
+console.debug(config)
+
+Object.entries(config).forEach(([key, value]) => {
+  if (value === null || value === "" || value == undefined) {
+    missing_env_vars += key.toUpperCase() + ", "
+  }
+})
+
+if (missing_env_vars !== "") {
+  throw new Error("Missing Env Vars values for: " + missing_env_vars.slice(0, -2)) // removes last comma in the string
+}
+
+module.exports = config

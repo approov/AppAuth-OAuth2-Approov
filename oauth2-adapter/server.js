@@ -1,7 +1,4 @@
-const path = require('path');
-const fs = require('fs');
 const http = require('http');
-const https = require('https');
 const express = require('express');
 const bodyParser = require('body-parser');
 const querystring = require('querystring');
@@ -9,20 +6,12 @@ const axios = require('axios');
 const chalk = require('chalk');
 
 const config = require(`${__dirname}/config/config`);
-const secrets = require(`${__dirname}/config/secrets`);
 const approov = require(`${__dirname}/approov`);
 
-const httpPort = config.httpPort || 3000
-const httpsPort = config.httpsPort || 3001
+const httpPort = config.http_port || 3000
+const domain = config.domain
 
-var app = express();
-
-const options = {
-  cert: fs.readFileSync(`${__dirname}/config/${config.publicCert}`),
-  key: fs.readFileSync(`${__dirname}/config/${config.privateKey}`)
-};
-
-var googleTokenEndpoint = config.googleTokenEndpoint;
+let app = express();
 
 function log_req(req) {
   console.log(chalk.cyan(`Request: ${JSON.stringify({
@@ -32,61 +21,61 @@ function log_req(req) {
   }, null, '  ')}`));
 }
 
-// redirect http to https
-
-app.use(function(req, res, next) {
-  if (req.secure) {
-      next();
-  } else {
-      let host = req.headers.host.replace(new RegExp(`:${httpPort}`, 'g'), `:${httpsPort}`);
-      res.redirect(`https://${host}${req.url}`);
-  }
+app.use('/robots.txt', function(req, res, next) {
+  res.type('text/plain')
+  res.send("User-agent: *\nDisallow: /");
 });
 
-// check approov token
-
-if (config.approov_header  == null) {
-  throw new Error(`approov_header not found; please set in ${__dirname}/config.js`);
-}
-const approovHdr = config.approov_header;
+// Handles request to the root entry point.
+app.get('/', (req, res) => {
+  res.status(200).json({name: 'Books App'});
+});
 
 // parse bodies
-
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true })); // support form-encoded bodies (for the token endpoint)
+// support for form-encoded bodies (for the token endpoint)
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// adapt google discovery doc
-
+// OAuth2 adapter - google discovery doc
 app.get('/.well-known/openid-configuration', (req, res) => {
-  axios.get(config.googleDiscoveryUrl)
-    .then(response => { 
-      var doc = response.data;
 
-      // update google token endpoint 
-      if (doc.token_endpoint) googleTokenEndpoint = doc.googleTokenEndpoint;
+  log_req(req);
+
+  axios.get(config.google_discovery_url)
+    .then(response => { 
+      console.log("---> /.well-known/openid-configuration <---")
+
+      let doc = response.data;
+
+      console.debug("openid-configuration before", doc)
       
       // replace adapter as token endpoint
-      doc.token_endpoint = `https://10.0.2.2:${httpsPort}/oauth2/token`;
+      doc.token_endpoint = `https://${domain}/oauth2/token`;
+      doc.userinfo_endpoint = "https://www.googleapis.com/oauth2/v3/userinfo";
+      console.debug("openid-configuration", doc)
 
-      res.send(JSON.stringify(doc, undefined, 2));
+      res.json(doc);
     })
     .catch(error => {
-      console.log(error);
+      console.log("AXIOS:", config.google_discovery_url, error);
     });
 });
 
-// adapt token endpoint
-
+// OAuth2 adapter - endpoint for the redirect uri to exchange the code for an
+//  access and id token via the Google token endpoint
 app.post('/oauth2/token', (req, res) => {
-  console.log('oauth2/token');
-  //log_req(req);
-	
-	var auth = req.headers['authorization'];
+  console.log('---> /oauth2/token <---');
+
+  log_req(req);
+
+  let clientSecret
+  let clientId
+	let auth = req.headers['authorization'];
+
 	if (auth) {
-		// check the auth header
-		var clientCredentials = new Buffer(auth.slice('basic '.length), 'base64').toString().split(':');
-		var clientId = querystring.unescape(clientCredentials[0]);
-		var clientSecret = querystring.unescape(clientCredentials[1]);
+  	let clientCredentials = new Buffer(auth.slice('basic '.length), 'base64').toString().split(':');
+		clientId = querystring.unescape(clientCredentials[0]);
+		clientSecret = querystring.unescape(clientCredentials[1]);
   
     if (req.body.client_id) {
       console.log(chalk.red('Client attempted to authenticate with multiple methods'));
@@ -95,9 +84,10 @@ app.post('/oauth2/token', (req, res) => {
     }
 
     delete RegExp.body['authorization'];
+
   } else if (req.body.client_id) {
-		var clientId = req.body.client_id;
-		var clientSecret = req.body.client_secret;
+		clientId = req.body.client_id;
+		clientSecret = req.body.client_secret;
     delete req.body.client_secret;
   }
 
@@ -107,44 +97,34 @@ app.post('/oauth2/token', (req, res) => {
     return;
   }
 
-  console.log(`client_id: ${clientId}`);
-  console.log(`client_secret: ${clientSecret}`);
-
-  // check approov token
-
+  // Check the Approov Token
   if (!approov.isValid(clientSecret)) {
-    console.log(chalk.red('Unauthorized: invalid Approov token'));
-    res.status(401).send('Unauthorized');
+    console.log(chalk.red('Unauthorized: invalid Approov Token provided via the OAuth2 clientSecret.'));
+    res.status(401).json({error: 'unauthoried'});
     return;
   }
 
-  // adapt body with expected client secret
-
   req.body.client_id = clientId;
-  if (secrets.google_client_secret) {
-    req.body.client_secret = secrets.google_client_secret;
+
+  if (config.google_client_secret) {
+    // Replace the Approov Token in the client secret with the expected Google client secret.
+    req.body.client_secret = config.google_client_secret;
   }
 
   let encodedBody = Object.keys(req.body).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(req.body[k])}`).join('&');
 
-  console.log(`body: ${encodedBody}`);
-
   // post to actual google token endpoint
-
-  axios.post(config.googleTokenEndpoint, encodedBody)
+  axios.post(config.google_token_endpoint, encodedBody)
   .then(response => { 
-    res.send(response.data);
+    res.json(response.data);
   })
   .catch(error => {
-    console.log(`${error}`);
+    console.debug("AXIOS:", config.google_token_endpoint, error);
+    res.status(500).json({error: 'Internal server error'});
   });
 });
 
 // start server
-
 http.createServer(app).listen(httpPort);
-https.createServer(options, app).listen(httpsPort);
 
-console.log(`Server listening on ports ${httpPort} & ${httpsPort}`);
-
-// end of file
+console.log(`Server listening on ports ${httpPort}`);

@@ -3,7 +3,8 @@ package com.criticalblue.auth.demo.ui;
 import java.util.Collections;
 import java.util.List;
 
-import android.support.v7.widget.RecyclerView;
+import androidx.recyclerview.widget.RecyclerView;
+
 import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,12 +12,13 @@ import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
+import com.criticalblue.auth.demo.BooksApp;
 import com.criticalblue.auth.demo.R;
 import com.criticalblue.auth.demo.books.Book;
-import com.squareup.picasso.Picasso;
 
 public class BookListAdapter extends RecyclerView.Adapter<BookListAdapter.ViewHolder> {
     private static final String TAG = BookListAdapter.class.getSimpleName();
+    private final BooksApp app;
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         public ImageView imageView;
@@ -55,7 +57,8 @@ public class BookListAdapter extends RecyclerView.Adapter<BookListAdapter.ViewHo
 
     private int spanCount;
 
-    public BookListAdapter(BookSelectionListener bookSelectionListener, int spanCount) {
+    public BookListAdapter(BooksApp app, BookSelectionListener bookSelectionListener, int spanCount) {
+        this.app = app;
         this.books = Collections.emptyList();
         this.selectionListener = bookSelectionListener;
         this.spanCount = spanCount;
@@ -90,10 +93,10 @@ public class BookListAdapter extends RecyclerView.Adapter<BookListAdapter.ViewHo
         String imageLink = book.getImageLink();
         if (imageLink == null) imageLink = "- - -";
 
-        Picasso.with(holder.imageView.getContext())
-                .load(imageLink)
+        app.loadImage(imageLink)
                 .error(R.drawable.unknown_book)
-                .fit().centerCrop()
+                .fit()
+                .centerCrop()
                 .into(holder.imageView);
     }
 

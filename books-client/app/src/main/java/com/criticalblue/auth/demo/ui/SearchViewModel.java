@@ -1,9 +1,9 @@
 package com.criticalblue.auth.demo.ui;
 
 import android.app.Application;
-import android.arch.lifecycle.AndroidViewModel;
-import android.arch.lifecycle.LiveData;
-import android.arch.lifecycle.MutableLiveData;
+import androidx.lifecycle.AndroidViewModel;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
 import android.content.Intent;
 import android.util.Log;
 
@@ -14,11 +14,9 @@ import com.criticalblue.auth.demo.auth.AuthException;
 import com.criticalblue.auth.demo.auth.AuthLoginListener;
 import com.criticalblue.auth.demo.auth.AuthLogoutListener;
 import com.criticalblue.auth.demo.auth.AuthRepo;
-import com.criticalblue.auth.demo.auth.AuthRepoListener;
 import com.criticalblue.auth.demo.books.BooksRepo;
 
 import java.util.Collections;
-import java.util.concurrent.ExecutorService;
 
 public class SearchViewModel extends AndroidViewModel {
     private static final String TAG = SearchViewModel.class.getSimpleName();

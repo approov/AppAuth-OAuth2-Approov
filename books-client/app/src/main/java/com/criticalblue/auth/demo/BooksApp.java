@@ -1,28 +1,29 @@
 package com.criticalblue.auth.demo;
 
 import android.app.Application;
-import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
-import android.content.res.AssetManager;
 import android.net.Uri;
-import android.os.Build;
-import android.support.annotation.ColorRes;
-import android.support.annotation.NonNull;
+
+import androidx.annotation.ColorRes;
+
 import android.util.Log;
 
 import com.criticalblue.auth.demo.auth.AuthRepo;
 import com.criticalblue.auth.demo.books.BooksRepo;
 import com.google.common.io.BaseEncoding;
+import com.squareup.picasso.OkHttp3Downloader;
+import com.squareup.picasso.Picasso;
+import com.squareup.picasso.RequestCreator;
 
-import com.criticalblue.attestationlibrary.ApproovAttestation;
-import com.criticalblue.attestationlibrary.ApproovConfig;
-import com.criticalblue.attestationlibrary.TokenInterface;
-
-import java.net.MalformedURLException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+
+import okhttp3.OkHttpClient;
+
+// *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
+import io.approov.service.okhttp.ApproovService;
 
 public class BooksApp extends Application {
     private final String TAG = BooksApp.class.getSimpleName();
@@ -35,7 +36,7 @@ public class BooksApp extends Application {
     private BooksRepo booksRepo;
 
     @Override
-    public void onCreate (){
+    public void onCreate() {
         super.onCreate();
 
         Log.i(TAG, "Creating BooksApp");
@@ -46,21 +47,24 @@ public class BooksApp extends Application {
         booksRepo = new BooksRepo(this, authRepo);
         Log.i(TAG, "Books service created");
 
-        boolean ok = false;
-        try {
-            // Creates the configuration object for the Approov SDK based
-            // on the Android application context
-            ApproovConfig config =
-                    ApproovConfig.getDefaultConfig(this.getApplicationContext());
-            config.setCustomerName("Demo");
-            ApproovAttestation.initialize(config);
-            ok = true;
-        } catch (IllegalArgumentException ex) {
-            Log.e(TAG, ex.getMessage());
-        } catch (MalformedURLException ex) {
-            Log.e(TAG, ex.getMessage());
-        }
-        Log.i(TAG, ok? "Approov SDK initialized" : "Approov SDK failed to initialize");
+        // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
+        ApproovService.initialize(getApplicationContext(), getString(R.string.approov_config));
+
+        // *** UNCOMMENT THE LINE BELOW FOR APPROOV RUNTIME SECRETS ***
+        ApproovService.addSubstitutionQueryParam("key");
+    }
+
+    /**
+     * Returns a client for http requests.
+     *
+     * @return an http client.
+     */
+    public static OkHttpClient getHttpClient() {
+        // *** COMMENT THE LINE BELOW FOR APPROOV ***
+        //return new OkHttpClient.Builder().build();
+
+        // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
+        return ApproovService.getOkHttpClient();
     }
 
     public AuthRepo getAuthRepo() {
@@ -69,16 +73,6 @@ public class BooksApp extends Application {
 
     public BooksRepo getBooksRepo() {
         return booksRepo;
-    }
-
-    public boolean isRegisteredUri(Uri uri) {
-        Intent redirectIntent = new Intent();
-        redirectIntent.setPackage(this.getPackageName());
-        redirectIntent.setAction(Intent.ACTION_VIEW);
-        redirectIntent.addCategory(Intent.CATEGORY_BROWSABLE);
-        redirectIntent.setData(uri);
-
-        return !this.getPackageManager().queryIntentActivities(redirectIntent, 0).isEmpty();
     }
 
     public String getSignature() {
@@ -110,10 +104,33 @@ public class BooksApp extends Application {
     }
 
     public int getColorValue(@ColorRes int color) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return getColor(color);
-        } else {
-            return getResources().getColor(color);
-        }
+        return getColor(color);
+    }
+
+    /**
+     * Returns an image downloader for http requests.
+     *
+     * @return an http downloader.
+     */
+    public Picasso getImageDownloader() {
+        OkHttpClient okHttpClient = getHttpClient();
+
+        return new Picasso.Builder(getApplicationContext())
+                .downloader(new OkHttp3Downloader(okHttpClient))
+                .listener((picasso, uri, exception) -> {
+                    Log.w(TAG, "FAILED TO LOAD IMAGE: " + uri.toString());
+                    Log.e(TAG, exception.toString());
+                })
+                .build();
+    }
+
+    public RequestCreator loadImage(String url) {
+        // Images links returned by the Google API are http and the image will not load, because the
+        // call will be redirected to https.
+        Uri uri = Uri.parse(url);
+        url = "https://" + uri.getEncodedAuthority() + uri.getEncodedPath() + "?" + uri.getEncodedQuery();
+        Log.w(TAG, url);
+        return getImageDownloader().load(url);
     }
 }
+

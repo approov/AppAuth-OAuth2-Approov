@@ -29,10 +29,10 @@ public class BooksRepo {
 
     private static final String BOOKS_URL_BASE = "https://www.googleapis.com/books/v1/";
 
-    private BooksApp app;
-    private AuthRepo authRepo;
-    private BooksAPI booksAPIwithKey;
-    private BooksAPI booksAPIwithToken;
+    private final BooksApp app;
+    private final AuthRepo authRepo;
+    private final BooksAPI booksAPIwithKey;
+    private final BooksAPI booksAPIwithToken;
 
     public BooksRepo(BooksApp app, AuthRepo authRepo) {
         this.app = app;
@@ -43,14 +43,14 @@ public class BooksRepo {
 
     private BooksAPI createBooksAPI(boolean withKey, boolean withToken) {
         HttpLoggingInterceptor logger = new HttpLoggingInterceptor();
-        logger.setLevel(HttpLoggingInterceptor.Level.BODY);
+        logger.setLevel(HttpLoggingInterceptor.Level.HEADERS);
 
         OkHttpClient.Builder clientBuilder = new OkHttpClient().newBuilder();
         if (withKey) clientBuilder.addInterceptor(authRepo.getApiKeyInterceptor());
         if (withToken) clientBuilder.addInterceptor(authRepo.getAccessTokenInterceptor());
-        if (true) clientBuilder.addInterceptor(logger);
+        clientBuilder.addInterceptor(logger);
 
-        OkHttpClient client = clientBuilder.build();
+        OkHttpClient client = app.getHttpClient();
 
         Gson gson = new GsonBuilder().setLenient().create();
         Retrofit retrofit = new Retrofit.Builder()
@@ -65,6 +65,7 @@ public class BooksRepo {
     public void search(String query, BookListCallback callback) {
         if (query == null || query.trim().length() == 0 || callback == null) return;
 
+        Log.e(TAG, BOOKS_URL_BASE + "?" + query);
         Call<BookListResult> request = booksAPIwithKey.searchBooks(query);
         request.enqueue(new SearchCallback(query, callback));
     }

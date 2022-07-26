@@ -1,7 +1,6 @@
 
 package com.criticalblue.auth.demo.books.api;
 
-import javax.annotation.Generated;
 import com.google.gson.annotations.SerializedName;
 
 public class BookShelfResult {

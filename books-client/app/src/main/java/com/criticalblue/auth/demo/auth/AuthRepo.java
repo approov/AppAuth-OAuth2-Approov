@@ -3,13 +3,11 @@ package com.criticalblue.auth.demo.auth;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.support.annotation.Nullable;
-import android.support.customtabs.CustomTabsIntent;
-import android.util.Log;
-import android.webkit.URLUtil;
 
-import com.criticalblue.attestationlibrary.ApproovAttestation;
-import com.criticalblue.attestationlibrary.TokenInterface;
+import androidx.browser.customtabs.CustomTabsIntent;
+
+import android.util.Log;
+
 import com.criticalblue.auth.demo.BooksApp;
 import com.criticalblue.auth.demo.R;
 import com.google.gson.Gson;
@@ -24,20 +22,20 @@ import net.openid.appauth.AuthorizationService;
 import net.openid.appauth.AuthorizationServiceConfiguration;
 import net.openid.appauth.AuthorizationServiceDiscovery;
 import net.openid.appauth.ClientAuthentication;
-import net.openid.appauth.ClientSecretBasic;
 import net.openid.appauth.ClientSecretPost;
 import net.openid.appauth.ResponseTypeValues;
 import net.openid.appauth.TokenResponse;
-import net.openid.appauth.connectivity.ConnectionBuilder;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import okhttp3.HttpUrl;
+import io.approov.service.okhttp.ApproovException;
+import io.approov.service.okhttp.ApproovService;
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -66,19 +64,17 @@ public class AuthRepo {
 
     BooksApp app;
 
-    private Semaphore loginLock;
+    private final Semaphore loginLock;
 
     private AuthLoginListener loginListener;
-    private AuthLogoutListener logoutListener;
 
-    private AuthorizationService authService;
+    private final AuthorizationService authService;
     private AuthState authState;
     private String userInfoUrl;
+
     String clientId;
     String redirectUri;
     String authScope;
-
-    ConnectionBuilder connectionBuilder;
 
     public AuthRepo(BooksApp app) {
         this.app = app;
@@ -86,12 +82,9 @@ public class AuthRepo {
         loginLock = new Semaphore(1);
 
         loginListener = null;
-        logoutListener = null;
-
-        connectionBuilder = new SignedConnectionBuilder(app.getAssets());
 
         AppAuthConfiguration.Builder builder = new AppAuthConfiguration.Builder();
-        builder.setConnectionBuilder(connectionBuilder);
+
         authService = new AuthorizationService(app, builder.build());
         authState = null;
         userInfoUrl = null;
@@ -100,6 +93,21 @@ public class AuthRepo {
         authScope = null;
     }
 
+    private String fetchApproovToken() {
+        String token = null;
+
+        try {
+            token = ApproovService.fetchToken(app.getString(R.string.adapter_host));
+            Log.e(TAG, token);
+        } catch (ApproovException e) {
+            e.printStackTrace();
+        }
+
+        if (token == null) {
+            token = "";
+        }
+        return token;
+    }
 
     public boolean isConfigured() {
         return (authState != null &&
@@ -138,39 +146,22 @@ public class AuthRepo {
         this.loginListener = loginListener;
         loginListener.onStart(AuthRepo.this, AUTH_LOGIN_START);
 
-        if (!isConfigured()) {
-            startServiceConfig();
-        } else {
-            startUserAuth();
-        }
+        initOauth2Flow();
     }
 
-    private void startServiceConfig() {
-        Log.i(TAG, "Starting service config");
+    private void initOauth2Flow() {
+        Log.i(TAG, "---> Fetch Authorization config");
 
         String discoveryEndpoint = app.getString(R.string.discovery_endpoint);
-        if (discoveryEndpoint.trim().length() == 0 || !URLUtil.isValidUrl(discoveryEndpoint)) {
-            Log.i(TAG, "Using static service config");
-            AuthorizationServiceConfiguration serviceConfig =
-                    new AuthorizationServiceConfiguration(
-                            Uri.parse(app.getString(R.string.authorization_endpoint)),
-                            Uri.parse(app.getString(R.string.token_endpoint)));
-            authState = new AuthState(serviceConfig);
-            userInfoUrl = app.getString(R.string.user_info_endpoint);
+        Log.i(TAG, "discoveryEndpoint: " + discoveryEndpoint);
 
-            finishServiceConfig();
-        } else {
-            Log.i(TAG, "Using discovery service config");
-            Uri discoveryUri = Uri.parse(discoveryEndpoint);
-            loginListener.onEvent(AuthRepo.this, AUTH_SERVICE_DISCOVERY_START);
+        Uri discoveryUri = Uri.parse(discoveryEndpoint);
+        loginListener.onEvent(AuthRepo.this, AUTH_SERVICE_DISCOVERY_START);
 
-            Log.i(TAG, "  at " + discoveryUri);
-            AuthorizationServiceConfiguration.fetchFromUrl(discoveryUri, this::finishServiceDiscovery, connectionBuilder);
-        }
+        AuthorizationServiceConfiguration.fetchFromUrl(discoveryUri, this::finishServiceDiscovery);
     }
 
-    private void finishServiceDiscovery(AuthorizationServiceConfiguration config,
-            AuthorizationException ex) {
+    private void finishServiceDiscovery(AuthorizationServiceConfiguration config, AuthorizationException ex) {
         if (config == null) {
             failLogin(new AuthException("Failed to retrieve authorization service discovery document"));
             return;
@@ -178,58 +169,53 @@ public class AuthRepo {
 
         authState = new AuthState(config);
         AuthorizationServiceDiscovery discovery = config.discoveryDoc;
-        userInfoUrl = discovery.getUserinfoEndpoint().toString();
+
+        if (discovery != null && discovery.getUserinfoEndpoint() != null) {
+            userInfoUrl = discovery.getUserinfoEndpoint().toString();
+        }
+
+        validateUserInfoUrl();
 
         loginListener.onEvent(AuthRepo.this, AUTH_SERVICE_DISCOVERY_FINISH);
 
-        finishServiceConfig();
+        Log.i(TAG, "---> Service Discovery Config");
+        Log.i(TAG, "  authorization endpoint: " + Objects.requireNonNull(authState.getAuthorizationServiceConfiguration()).authorizationEndpoint);
+        Log.i(TAG, "  token endpoint: " + authState.getAuthorizationServiceConfiguration().tokenEndpoint);
+        Log.i(TAG, "  user info endpoint: " + userInfoUrl);
+
+        setClientConfig();
+        startUserAuth();
     }
 
-    private void finishServiceConfig() {
-        URL test;
+    private void validateUserInfoUrl() {
         try {
-            test = new URL(userInfoUrl);
+            new URL(userInfoUrl);
             if (!userInfoUrl.endsWith("/")) userInfoUrl += "/";
         } catch (MalformedURLException urlEx) {
             userInfoUrl = null;
         }
-
-        Log.i(TAG, "Finishing service config");
-        Log.i(TAG, "  authorization endpoint: " + authState.getAuthorizationServiceConfiguration().authorizationEndpoint);
-        Log.i(TAG, "  token endpoint: " + authState.getAuthorizationServiceConfiguration().tokenEndpoint);
-        Log.i(TAG, "  user info endpoint: " + userInfoUrl);
-
-        startClientConfig();
     }
 
-    private void startClientConfig() {
-        Log.i(TAG, "Starting client config");
-
+    private void setClientConfig() {
         clientId = app.getString(R.string.client_id);
         redirectUri = app.getString(R.string.redirect_uri);
         authScope = app.getString(R.string.authorization_scope);
 
-        finishClientConfig();
-    }
-
-    private void finishClientConfig() {
-        Log.i(TAG, "Finishing client config");
+        Log.i(TAG, "---> Client config");
         Log.i(TAG, "  client id: " + clientId);
         Log.i(TAG, "  redirect uri: " + redirectUri);
         Log.i(TAG, "  auth scope: " + authScope);
-
-        startUserAuth();
     }
 
     private void startUserAuth() {
-        Log.i(TAG, "Starting user auth");
+        Log.i(TAG, "---> Starting user auth");
 
         loginListener.onEvent(AuthRepo.this, AUTH_USER_AUTH_START);
 
         // may need to do this off UI thread?
 
         AuthorizationRequest.Builder authRequestBuilder = new AuthorizationRequest.Builder(
-                authState.getAuthorizationServiceConfiguration(),
+                Objects.requireNonNull(authState.getAuthorizationServiceConfiguration()),
                 clientId,
                 ResponseTypeValues.CODE,
                 Uri.parse(redirectUri))
@@ -247,16 +233,16 @@ public class AuthRepo {
     }
 
     public void notifyUserAgentResponse(Intent data, int returnCode) {
-        if (returnCode != app.RC_AUTH) {
+        if (returnCode != BooksApp.RC_AUTH) {
             failLogin(new AuthException("User authorization was cancelled"));
             return;
         }
 
         AuthorizationResponse resp = AuthorizationResponse.fromIntent(data);
         AuthorizationException ex = AuthorizationException.fromIntent(data);
+
         if (resp == null) {
             failLogin(new AuthException("User authorization failed"));
-            return;
         } else {
             authState.update(resp, ex);
             finishUserAuth();
@@ -264,67 +250,31 @@ public class AuthRepo {
     }
 
     private void finishUserAuth() {
-        Log.i(TAG, "Finishing user auth");
+        Log.i(TAG, "---> Finishing user auth");
 
         loginListener.onEvent(AuthRepo.this, AUTH_USER_AUTH_FINISH);
-
-        startApproovCheck();
-    }
-
-    private void startApproovCheck() {
-        Log.i(TAG, "Starting Approov check");
-
-        ApproovAttestation.shared().fetchApproovToken(new ApproovTokenFetcher(),
-                "www.googleapis.com"); // checking google api domain rather than
-                                          // self-signed oauth2 adapter
-    }
-
-    private String approovToken = "BAD";
-
-    public class ApproovTokenFetcher implements TokenInterface {
-
-        ApproovTokenFetcher() { /* EMPTY */ }
-
-        public void approovTokenFetchResult(final ApproovResults approovResults) {
-
-            ApproovAttestation.AttestationResult result = approovResults.getResult();
-            approovToken = approovResults.getToken();
-            Log.i(TAG, "Approov token = \"" + approovToken + "\"");
-
-            if (result == ApproovAttestation.AttestationResult.SUCCESS){
-                finishApproovCheck();
-            } else if (result == ApproovAttestation.AttestationResult.FAILURE){
-                failLogin(new AuthException("Approov checking failed"));
-                return;
-            }
-        }
-    }
-
-    private void finishApproovCheck() {
-        Log.i(TAG, "Finishing Approov check");
 
         startCodeExchange();
     }
 
     private void startCodeExchange() {
-        Log.i(TAG, "Starting code exchange");
+        Log.i(TAG, "---> Starting code exchange");
 
         loginListener.onEvent(AuthRepo.this, AUTH_CODE_EXCHANGE_START);
 
         AuthorizationResponse resp = authState.getLastAuthorizationResponse();
 
-        // use Approov token as secret
+        ClientAuthentication clientAuth = new ClientSecretPost(fetchApproovToken());
 
-        ClientAuthentication clientAuth = new ClientSecretPost(approovToken);
-        approovToken="BAD";
-
-        authService.performTokenRequest(
-                resp.createTokenExchangeRequest(), clientAuth, this::onTokenRequestCompleted);
+        if (resp != null) {
+            authService.performTokenRequest(
+                    resp.createTokenExchangeRequest(), clientAuth, this::onTokenRequestCompleted);
+        }
     }
 
     private void onTokenRequestCompleted(TokenResponse resp, AuthorizationException ex) {
         if (resp == null) {
-            failLogin(new AuthException(ex.getMessage()));
+            failLogin(new AuthException(ex.toString()));
             return;
         }
 
@@ -333,7 +283,7 @@ public class AuthRepo {
     }
 
     private void finishCodeExchange() {
-        Log.i(TAG, "Finishing code exchange");
+        Log.i(TAG, "---> Finishing code exchange");
 
         loginListener.onEvent(AuthRepo.this, AUTH_CODE_EXCHANGE_FINISH);
 
@@ -341,7 +291,7 @@ public class AuthRepo {
     }
 
     private void startUserInfo() {
-        Log.i(TAG, "Starting user info");
+        Log.i(TAG, "---> Starting user info");
 
         loginListener.onEvent(AuthRepo.this, AUTH_USER_INFO_START);
         fetchUserInfo(this::onUserInfoCompleted);
@@ -353,9 +303,8 @@ public class AuthRepo {
         finishUserInfo();
     }
 
-
     private void finishUserInfo() {
-        Log.i(TAG, "Finishing user info");
+        Log.i(TAG, "---> Finishing user info");
 
         loginListener.onEvent(AuthRepo.this, AUTH_USER_INFO_FINISH);
 
@@ -371,7 +320,7 @@ public class AuthRepo {
     }
 
     private void finishLogin() {
-        Log.i(TAG, "Finishing login");
+        Log.i(TAG, "---> Finishing login");
 
         loginListener.onSuccess(AuthRepo.this, AUTH_LOGIN_SUCCESS);
 
@@ -400,24 +349,31 @@ public class AuthRepo {
     }
 
     class UserInfoTask extends AsyncTask<Void, Void, UserInfo> {
-        private UserInfoCallback callback;
-        UserInfoTask(UserInfoCallback callback) { this.callback = callback; }
+        private final UserInfoCallback callback;
+
+        UserInfoTask(UserInfoCallback callback) {
+            this.callback = callback;
+        }
 
         protected UserInfo doInBackground(Void... params) {
             UserInfoAPI userInfoAPI = createUserInfoAPI();
             Call<UserInfoResult> call = userInfoAPI.getUserInfo();
+            userInfo = null;
+
             try {
                 Response<UserInfoResult> response = call.execute();
 
+                Log.i(TAG, "---> User Info Request URL: " + call.request().url());
+
                 if (response.isSuccessful()) {
                     UserInfoResult result = response.body();
-                    userInfo = new UserInfo(result.getFamilyName(), result.getGivenName(),
-                            result.getPicture());
-                } else {
-                    userInfo = null;
+                    if (result != null) {
+                        userInfo = new UserInfo(result.getFamilyName(), result.getGivenName(),
+                                result.getPicture());
+                    }
                 }
             } catch (IOException e) {
-                userInfo = null;
+                Log.e(TAG, e.toString());
             }
 
             return userInfo;
@@ -478,15 +434,15 @@ public class AuthRepo {
         logoutListener.onStart(AuthRepo.this, AUTH_LOGOUT_START);
 
         if (isConfigured()) {
-            authState = new AuthState(authState.getAuthorizationServiceConfiguration());
-            userInfo = null;
+            authState = new AuthState(Objects.requireNonNull(authState.getAuthorizationServiceConfiguration()));
         } else {
             authState = null;
             clientId = null;
             redirectUri = null;
             userInfoUrl = null;
-            userInfo = null;
         }
+
+        userInfo = null;
 
         logoutListener.onSuccess(AuthRepo.this, AUTH_LOGOUT_SUCCESS);
 
@@ -494,22 +450,15 @@ public class AuthRepo {
     }
 
     public Interceptor getApiKeyInterceptor() {
-        return new Interceptor() {
-            @Override
-            public okhttp3.Response intercept(Chain chain) throws IOException {
-                Request request = chain.request();
+        return chain -> {
+            Request request = chain.request();
 
-                HttpUrl url = request.url().newBuilder()
-                        .addQueryParameter("key", app.getString(R.string.api_key)).build();
+            Log.i(TAG, "---> API Key Interceptor: " + request.url());
 
-                request = request.newBuilder()
-                        .url(url)
-                        .header("X-Android-Package", app.getPackageName())
-                        .header("X-Android-Cert", app.getSignature())
-                        .build();
+            request = request.newBuilder()
+                    .build();
 
-                return chain.proceed(request);
-            }
+            return chain.proceed(request);
         };
     }
 
@@ -517,7 +466,9 @@ public class AuthRepo {
 
     // dangerous; do not call on UI thread.
     private String getAccessToken() {
-        if (!isAuthorized()) return null;
+        if (!isAuthorized()) {
+            return null;
+        }
 
         CountDownLatch actionComplete = new CountDownLatch(1);
 
@@ -542,21 +493,18 @@ public class AuthRepo {
     }
 
     public Interceptor getAccessTokenInterceptor() {
-        return new Interceptor() {
-            @Override
-            public okhttp3.Response intercept(Chain chain) throws IOException {
-                Request request = chain.request();
+        return chain -> {
+            Request request = chain.request();
 
-                request = request.newBuilder()
-                        .header("X-Android-Package", app.getPackageName())
-                        .header("X-Android-Cert", app.getSignature())
-                        .header("Authorization", "Bearer " + getAccessToken())
-                        .build();
+            Log.i(TAG, "---> Token Interceptor: " + request.url());
 
-                Log.i(TAG, "token: " + getAccessToken());
+            request = request.newBuilder()
+                    .header("Authorization", "Bearer " + getAccessToken())
+                    .build();
 
-                return chain.proceed(request);
-            }
+            Log.i(TAG, "token: " + getAccessToken());
+
+            return chain.proceed(request);
         };
     }
 }

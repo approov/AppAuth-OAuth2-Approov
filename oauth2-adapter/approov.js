@@ -14,27 +14,15 @@
  * limitations under the License.
  */
 
-const path = require('path');
-const url = require('url');
 const jwt = require('jsonwebtoken');
 const chalk = require('chalk');
 
 const config = require(`${__dirname}/config/config`);
-const secrets = require(`${__dirname}/config/secrets`);
 
-
-if (secrets.approov_token_secret == null) {
-  throw new Error(`approov_token_secret not found; please set in ${__dirname}/secrets.js`);
-}
-const sigkey = Buffer.from(secrets.approov_token_secret, 'base64');
+const approovSecret = Buffer.from(config.approov_base64_secret, 'base64');
 const extraChecks = { algorithms: ['HS256'] };
 
-var enforceApproov = true;
-if (config.approov_enforcement == null) {
-  console.log(chalk.red(`\nCAUTION: approov_enforcement not found; please set in ${__dirname}/config.js\n`));
-} else {
-  enforceApproov = config.approov_enforcement;
-}
+let  enforceApproov = config.approov_enforcement;
 
 if (!enforceApproov) {
   console.log(chalk.red('\nCAUTION: Approov token checking is disabled!\n'));
@@ -45,21 +33,24 @@ function isEnforced() {
 }
 
 function isValid(token) {
-  var verified = true;
+
+  if (!enforceApproov) {
+    console.log(chalk.red("Approov token check it's disabled."));
+    return false
+  }
 
   try {
-    var decoded = jwt.verify(token, sigkey, extraChecks);
-  } catch (err) {
-    verified = false;
-  }
 
-  if (verified) {
+    jwt.verify(token, approovSecret, extraChecks);
     console.log(chalk.blue('Approov token verified'));
-  } else {
-    console.log(chalk.red('Approov token not verified'));
+    return true
+
+  } catch (err) {
+    console.log(chalk.red('Approov token failed verification: '));
+    console.log(chalk.red(err))
+    return false
   }
 
-  return verified || !enforceApproov;
 }
 
 
@@ -67,5 +58,3 @@ module.exports = {
   isEnforced: isEnforced,
   isValid: isValid
 };
-
-// end of file

@@ -1,18 +1,18 @@
 package com.criticalblue.auth.demo.ui;
 
 import android.app.AlertDialog;
-import android.arch.lifecycle.Lifecycle;
-import android.arch.lifecycle.Observer;
-import android.arch.lifecycle.ViewModelProviders;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.Observer;
+import androidx.lifecycle.ViewModelProviders;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.Bundle;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.GridLayoutManager;
-import android.support.v7.widget.RecyclerView;
-import android.support.v7.widget.SearchView;
+import androidx.core.content.ContextCompat;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.appcompat.widget.SearchView;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -203,7 +203,8 @@ public class SearchActivity extends AppCompatActivity {
     private void bindSearchViews() {
         GridLayoutManager gridLayoutManager = new GridLayoutManager(this,
                 getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT ? 2 : 3);
-        booksAdapter = new BookListAdapter(selectionListener, gridLayoutManager.getSpanCount());
+
+        booksAdapter = new BookListAdapter(app, selectionListener, gridLayoutManager.getSpanCount());
 
         booksView.setLayoutManager(gridLayoutManager);
         booksView.setAdapter(booksAdapter);
