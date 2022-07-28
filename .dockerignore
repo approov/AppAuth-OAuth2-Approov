@@ -1,6 +1,0 @@
-.local/
-bin/
-books-client/
-oauth2-adapter/node_modules/
-npm-debug.log
-.env*
