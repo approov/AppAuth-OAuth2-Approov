@@ -1,0 +1,11 @@
+# COPY AND PASTE BELOW LINES TO YOUR ACTUAL local.properties FILE
+
+oauth2.adapterHost=your.domain.com
+oauth2.redirectPath=/oauth2redirect
+oauth2.discoveryEndpoint=https://accounts.google.com/.well-known/openid-configuration
+
+google.clientId=___YOUR_GOOGLE_CLIENT_ID_HERE___
+google.userInfoEndpoint=https://www.googleapis.com/oauth2/v3/userinfo
+google.authorizationScope=openid email profile https://www.googleapis.com/auth/books
+
+approov.config=___YOUR_APPROOV_CONFIG_STRING_HERE___
