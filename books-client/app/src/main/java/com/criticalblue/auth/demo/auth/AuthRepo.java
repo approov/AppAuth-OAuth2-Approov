@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
 
+import androidx.annotation.NonNull;
 import androidx.browser.customtabs.CustomTabsIntent;
 
 import android.util.Log;
@@ -25,6 +26,7 @@ import net.openid.appauth.ClientAuthentication;
 import net.openid.appauth.ClientSecretPost;
 import net.openid.appauth.ResponseTypeValues;
 import net.openid.appauth.TokenResponse;
+import net.openid.appauth.connectivity.ConnectionBuilder;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -34,8 +36,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import io.approov.service.okhttp.ApproovException;
-import io.approov.service.okhttp.ApproovService;
+import io.approov.service.httpsurlconn.ApproovException;
+import io.approov.service.httpsurlconn.ApproovNetworkException;
+import io.approov.service.httpsurlconn.ApproovRejectionException;
+
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -58,6 +62,8 @@ import static com.criticalblue.auth.demo.auth.AuthEvent.AUTH_USER_AUTH_FINISH;
 import static com.criticalblue.auth.demo.auth.AuthEvent.AUTH_USER_AUTH_START;
 import static com.criticalblue.auth.demo.auth.AuthEvent.AUTH_USER_INFO_FINISH;
 import static com.criticalblue.auth.demo.auth.AuthEvent.AUTH_USER_INFO_START;
+
+import javax.net.ssl.HttpsURLConnection;
 
 public class AuthRepo {
     private final String TAG = AuthRepo.class.getSimpleName();
@@ -82,31 +88,66 @@ public class AuthRepo {
         loginLock = new Semaphore(1);
 
         loginListener = null;
-
-        AppAuthConfiguration.Builder builder = new AppAuthConfiguration.Builder();
-
-        authService = new AuthorizationService(app, builder.build());
         authState = null;
         userInfoUrl = null;
         clientId = null;
         redirectUri = null;
         authScope = null;
+
+        authService = new AuthorizationService(app, ApproovCustomConnection());
     }
 
-    private String fetchApproovToken() {
-        String token = null;
+    /**
+     * All the calls made by AppAuth will be secured by using the Approov Managed Trust Roots
+     * feature to protect the TLS channel against MitM attacks.
+     *
+     * @link https://approov.io/docs/latest/approov-usage-documentation/#managed-trust-roots
+     *
+     * @return The AppAuthConfiguration with a HttpsURLConnection secured by Approov
+     */
+    private AppAuthConfiguration ApproovCustomConnection() {
+        return new AppAuthConfiguration.Builder()
+                .setConnectionBuilder(new ConnectionBuilder() {
+                    @NonNull
+                    @Override
+                    public HttpsURLConnection openConnection(@NonNull Uri uri) throws IOException {
+                        URL url = new URL(uri.toString());
+                        HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
+
+                        io.approov.service.httpsurlconn.ApproovService.addApproov(connection);
+
+                        return connection;
+                    }
+                })
+                .build();
+    }
+
+    /**
+     * Approov allows to fetch secrets just in time for being used to make API calls, provided that
+     * the mobile app passes the attestation, thus no more hardcoded secrets on the app code.
+     *
+     * @link https://approov.io/docs/latest/approov-usage-documentation/#secure-strings
+     *
+     * @return The client secret retrieved from the Approov Cloud service
+     */
+    private String fetchJustInTimeClientSecret() {
+        String clientSecret = null;
 
         try {
-            token = ApproovService.fetchToken(app.getString(R.string.adapter_host));
-            Log.e(TAG, token);
+            clientSecret = io.approov.service.httpsurlconn.ApproovService.fetchSecureString("client_secret", null);
+        } catch (ApproovRejectionException e) {
+            // failure due to the attestation being rejected, e.getARC() and e.getRejectionReasons() may be used to present information to the user
+            // (note e.getRejectionReasons() is only available if the feature is enabled, otherwise it is always an empty string)
+            failLogin(new AuthException("Failed to fetch the client_secret. ARC: " + e.getARC() + "REASON: " + e.getRejectionReasons()));
+        } catch (ApproovNetworkException e) {
+            // failure due to a potentially temporary networking issue, allow for a user initiated retry
+            failLogin(new AuthException("Failed to fetch the client_secret. Check the network connectivity and try again."));
         } catch (ApproovException e) {
-            e.printStackTrace();
+            // a more permanent error, see e.getMessage()
+            failLogin(new AuthException("Failed to fetch the client_secret. EXCEPTION: " + e.getMessage()));
         }
 
-        if (token == null) {
-            token = "";
-        }
-        return token;
+        return clientSecret;
     }
 
     public boolean isConfigured() {
@@ -170,8 +211,8 @@ public class AuthRepo {
         authState = new AuthState(config);
         AuthorizationServiceDiscovery discovery = config.discoveryDoc;
 
-        if (discovery != null && discovery.getUserinfoEndpoint() != null) {
-            userInfoUrl = discovery.getUserinfoEndpoint().toString();
+        if (discovery != null) {
+            userInfoUrl = app.getString(R.string.user_info_endpoint);
         }
 
         validateUserInfoUrl();
@@ -264,7 +305,14 @@ public class AuthRepo {
 
         AuthorizationResponse resp = authState.getLastAuthorizationResponse();
 
-        ClientAuthentication clientAuth = new ClientSecretPost(fetchApproovToken());
+        String clientSecret = fetchJustInTimeClientSecret();
+
+        if (clientSecret == null) {
+            failLogin(new AuthException("Failed to fetch the client_secret. Did you registered the APK with Approov?"));
+            return;
+        }
+
+        ClientAuthentication clientAuth = new ClientSecretPost(clientSecret);
 
         if (resp != null) {
             authService.performTokenRequest(
@@ -274,7 +322,8 @@ public class AuthRepo {
 
     private void onTokenRequestCompleted(TokenResponse resp, AuthorizationException ex) {
         if (resp == null) {
-            failLogin(new AuthException(ex.toString()));
+            Log.e(TAG, "onTokenRequestCompleted(): " + ex.getMessage());
+            failLogin(new AuthException(ex.getMessage()));
             return;
         }
 
@@ -501,8 +550,6 @@ public class AuthRepo {
             request = request.newBuilder()
                     .header("Authorization", "Bearer " + getAccessToken())
                     .build();
-
-            Log.i(TAG, "token: " + getAccessToken());
 
             return chain.proceed(request);
         };

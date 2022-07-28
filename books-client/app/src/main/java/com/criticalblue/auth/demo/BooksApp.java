@@ -1,24 +1,17 @@
 package com.criticalblue.auth.demo;
 
 import android.app.Application;
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.Signature;
 import android.net.Uri;
+import android.util.Log;
 
 import androidx.annotation.ColorRes;
 
-import android.util.Log;
-
 import com.criticalblue.auth.demo.auth.AuthRepo;
 import com.criticalblue.auth.demo.books.BooksRepo;
-import com.google.common.io.BaseEncoding;
+
 import com.squareup.picasso.OkHttp3Downloader;
 import com.squareup.picasso.Picasso;
 import com.squareup.picasso.RequestCreator;
-
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 
 import okhttp3.OkHttpClient;
 
@@ -39,23 +32,19 @@ public class BooksApp extends Application {
     public void onCreate() {
         super.onCreate();
 
-        Log.i(TAG, "Creating BooksApp");
-
         authRepo = new AuthRepo(this);
-        Log.i(TAG, "Auth repo created");
-
         booksRepo = new BooksRepo(this, authRepo);
-        Log.i(TAG, "Books service created");
 
         // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
+        // Used to secure the API requests to the Google books API
         ApproovService.initialize(getApplicationContext(), getString(R.string.approov_config));
 
-        // *** UNCOMMENT THE LINE BELOW FOR APPROOV RUNTIME SECRETS ***
-        ApproovService.addSubstitutionQueryParam("key");
+        // Used to secure the OAuth2 flow with the AppAuth package
+        io.approov.service.httpsurlconn.ApproovService.initialize(getApplicationContext(), "");
     }
 
     /**
-     * Returns a client for http requests.
+     * Returns a client for HTTPS requests.
      *
      * @return an http client.
      */
@@ -67,50 +56,13 @@ public class BooksApp extends Application {
         return ApproovService.getOkHttpClient();
     }
 
-    public AuthRepo getAuthRepo() {
-        return authRepo;
-    }
-
-    public BooksRepo getBooksRepo() {
-        return booksRepo;
-    }
-
-    public String getSignature() {
-        PackageManager pm = getPackageManager();
-        String packageName = getPackageName();
-        try {
-            PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES);
-            if (packageInfo == null
-                    || packageInfo.signatures == null
-                    || packageInfo.signatures.length == 0
-                    || packageInfo.signatures[0] == null) {
-                return null;
-            }
-            return signatureDigest(packageInfo.signatures[0]);
-        } catch (PackageManager.NameNotFoundException e) {
-            return null;
-        }
-    }
-
-    private static String signatureDigest(Signature sig) {
-        byte[] signature = sig.toByteArray();
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA1");
-            byte[] digest = md.digest(signature);
-            return BaseEncoding.base16().lowerCase().encode(digest);
-        } catch (NoSuchAlgorithmException e) {
-            return null;
-        }
-    }
-
-    public int getColorValue(@ColorRes int color) {
-        return getColor(color);
-    }
-
     /**
-     * Returns an image downloader for http requests.
+     * Builds a Picasso image downloader with an OkHttpClient secured with the Approov Managed Trust
+     * Roots feature to protect the TLS channel against MitM attacks.
      *
-     * @return an http downloader.
+     * @link https://approov.io/docs/latest/approov-usage-documentation/#managed-trust-roots
+     *
+     * @return a Picasso downloader secured by Approov.
      */
     public Picasso getImageDownloader() {
         OkHttpClient okHttpClient = getHttpClient();
@@ -124,6 +76,14 @@ public class BooksApp extends Application {
                 .build();
     }
 
+    /**
+     * Loads an image with the http:// protocol upgraded to the https:// protocol.
+     *
+     * The OkHttpClient being used is secured by Approov.
+     *
+     * @param url The url to download the image
+     * @return A RequestCreator instance protected by Approov
+     */
     public RequestCreator loadImage(String url) {
         // Images links returned by the Google API are http and the image will not load, because the
         // call will be redirected to https.
@@ -131,6 +91,18 @@ public class BooksApp extends Application {
         url = "https://" + uri.getEncodedAuthority() + uri.getEncodedPath() + "?" + uri.getEncodedQuery();
         Log.w(TAG, url);
         return getImageDownloader().load(url);
+    }
+
+    public AuthRepo getAuthRepo() {
+        return authRepo;
+    }
+
+    public BooksRepo getBooksRepo() {
+        return booksRepo;
+    }
+
+    public int getColorValue(@ColorRes int color) {
+        return getColor(color);
     }
 }
 

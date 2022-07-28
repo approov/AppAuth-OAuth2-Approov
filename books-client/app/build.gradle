@@ -25,15 +25,15 @@ android {
         manifestPlaceholders = [
             'appAuthRedirectScheme': "https",
             'redirect_scheme'      : "https",
-            'redirect_host'        : "${properties.getProperty('oauth2.adapterHost')}",
+            'redirect_host'        : "${oauth2AdapterHost}",
             'redirect_path'        : "${properties.getProperty('oauth2.redirectPath')}",
         ]
 
         // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
         resValue "string", "approov_config", "${properties.getProperty('approov.config')}"
 
-        resValue "string", "adapter_host", "${oauth2AdapterHost}"
-        resValue "string", "discovery_endpoint", "https://${oauth2AdapterHost}${properties.getProperty('oauth2.discoveryEndpoint')}"
+        resValue "string", "discovery_endpoint", "${properties.getProperty('oauth2.discoveryEndpoint')}"
+        resValue "string", "user_info_endpoint", "${properties.getProperty('google.userInfoEndpoint')}"
         resValue "string", "redirect_uri", "https://${oauth2AdapterHost}${properties.getProperty('oauth2.redirectPath')}"
 
         resValue "string", "client_id", "${properties.getProperty('google.clientId')}"
@@ -62,10 +62,10 @@ dependencies {
     androidTestImplementation('androidx.test.espresso:espresso-core:3.1.0', {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
-    implementation 'androidx.lifecycle:lifecycle-runtime:2.5.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime:2.5.1'
     implementation 'androidx.lifecycle:lifecycle-extensions:2.2.0'
     //noinspection LifecycleAnnotationProcessorWithJava8
-    annotationProcessor 'androidx.lifecycle:lifecycle-compiler:2.5.0'
+    annotationProcessor 'androidx.lifecycle:lifecycle-compiler:2.5.1'
     implementation 'com.jakewharton:butterknife:10.0.0'
     annotationProcessor 'com.jakewharton:butterknife-compiler:10.0.0'
     implementation 'net.openid:appauth:0.7.0'
@@ -80,4 +80,5 @@ dependencies {
 
     // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
     implementation 'com.github.approov:approov-service-okhttp:3.0.6'
+    implementation 'com.github.approov:approov-service-httpsurlconn:3.0.3'
 }
