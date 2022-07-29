@@ -16,7 +16,7 @@ import com.squareup.picasso.RequestCreator;
 import okhttp3.OkHttpClient;
 
 // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
-import io.approov.service.okhttp.ApproovService;
+// import io.approov.service.okhttp.ApproovService;
 
 public class BooksApp extends Application {
     private final String TAG = BooksApp.class.getSimpleName();
@@ -37,10 +37,10 @@ public class BooksApp extends Application {
 
         // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
         // Used to secure the API requests to the Google books API
-        ApproovService.initialize(getApplicationContext(), getString(R.string.approov_config));
+        // ApproovService.initialize(getApplicationContext(), getString(R.string.approov_config));
 
         // Used to secure the OAuth2 flow with the AppAuth package
-        io.approov.service.httpsurlconn.ApproovService.initialize(getApplicationContext(), "");
+        // io.approov.service.httpsurlconn.ApproovService.initialize(getApplicationContext(), "");
     }
 
     /**
@@ -50,10 +50,10 @@ public class BooksApp extends Application {
      */
     public static OkHttpClient getHttpClient() {
         // *** COMMENT THE LINE BELOW FOR APPROOV ***
-        //return new OkHttpClient.Builder().build();
+        return new OkHttpClient.Builder().build();
 
         // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
-        return ApproovService.getOkHttpClient();
+        // return ApproovService.getOkHttpClient();
     }
 
     /**

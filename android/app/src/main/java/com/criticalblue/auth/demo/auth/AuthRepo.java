@@ -36,9 +36,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import io.approov.service.httpsurlconn.ApproovException;
-import io.approov.service.httpsurlconn.ApproovNetworkException;
-import io.approov.service.httpsurlconn.ApproovRejectionException;
+// *** UNCOMMENT THE THREE LINES BELOW FOR APPROOV ***
+ import io.approov.service.httpsurlconn.ApproovException;
+ import io.approov.service.httpsurlconn.ApproovNetworkException;
+ import io.approov.service.httpsurlconn.ApproovRejectionException;
 
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
@@ -94,7 +95,12 @@ public class AuthRepo {
         redirectUri = null;
         authScope = null;
 
-        authService = new AuthorizationService(app, ApproovCustomConnection());
+        // *** COMMENT THE TWO LINES BELOW FOR APPROOV ***
+        AppAuthConfiguration configuration = new AppAuthConfiguration.Builder().build();
+//        authService = new AuthorizationService(app, configuration);
+
+        // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
+         authService = new AuthorizationService(app, ApproovCustomConnection());
     }
 
     /**
@@ -114,7 +120,7 @@ public class AuthRepo {
                         URL url = new URL(uri.toString());
                         HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
 
-                        io.approov.service.httpsurlconn.ApproovService.addApproov(connection);
+//                        io.approov.service.httpsurlconn.ApproovService.addApproov(connection);
 
                         return connection;
                     }
@@ -305,6 +311,21 @@ public class AuthRepo {
 
         AuthorizationResponse resp = authState.getLastAuthorizationResponse();
 
+        // *** COMMENT THE LINE BELOW FOR APPROOV ***
+        performTokenRequest(resp);
+
+        // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
+        // performApproovProtectedTokenRequest(resp);
+    }
+
+    private void performTokenRequest(AuthorizationResponse resp) {
+        if (resp != null) {
+            authService.performTokenRequest(
+                    resp.createTokenExchangeRequest(), this::onTokenRequestCompleted);
+        }
+    }
+
+    private void performApproovProtectedTokenRequest(AuthorizationResponse resp) {
         String clientSecret = fetchJustInTimeClientSecret();
 
         if (clientSecret == null) {
@@ -548,6 +569,7 @@ public class AuthRepo {
             Log.i(TAG, "---> Token Interceptor: " + request.url());
 
             request = request.newBuilder()
+//                    .header("X-Android-Package", app.getPackageName())
                     .header("Authorization", "Bearer " + getAccessToken())
                     .build();
 
