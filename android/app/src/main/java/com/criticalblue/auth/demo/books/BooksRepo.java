@@ -5,7 +5,6 @@ import android.util.Log;
 import com.criticalblue.auth.demo.BooksApp;
 import com.criticalblue.auth.demo.auth.AuthRepo;
 import com.criticalblue.auth.demo.books.api.BookListResult;
-import com.criticalblue.auth.demo.books.api.BookShelfResult;
 import com.criticalblue.auth.demo.books.api.ImageLinks;
 import com.criticalblue.auth.demo.books.api.Item;
 import com.criticalblue.auth.demo.books.api.VolumeInfo;
@@ -31,31 +30,30 @@ public class BooksRepo {
 
     private final BooksApp app;
     private final AuthRepo authRepo;
-    private final BooksAPI booksAPIwithKey;
-    private final BooksAPI booksAPIwithToken;
+    private final BooksAPI searchBooksAPI;
+    private final BooksAPI favouriteBooksAPI;
 
     public BooksRepo(BooksApp app, AuthRepo authRepo) {
         this.app = app;
         this.authRepo = authRepo;
-        this.booksAPIwithKey = createBooksAPI(true, false);
-        this.booksAPIwithToken = createBooksAPI(false, true);
+        this.searchBooksAPI = createBooksAPI(false);
+        this.favouriteBooksAPI = createBooksAPI(true);
     }
 
-    private BooksAPI createBooksAPI(boolean withKey, boolean withToken) {
+    private BooksAPI createBooksAPI(boolean withToken) {
         HttpLoggingInterceptor logger = new HttpLoggingInterceptor();
         logger.setLevel(HttpLoggingInterceptor.Level.HEADERS);
 
-        OkHttpClient.Builder clientBuilder = new OkHttpClient().newBuilder();
-        if (withKey) clientBuilder.addInterceptor(authRepo.getApiKeyInterceptor());
+        OkHttpClient client = app.getHttpClient();
+
+        OkHttpClient.Builder clientBuilder = client.newBuilder();
         if (withToken) clientBuilder.addInterceptor(authRepo.getAccessTokenInterceptor());
         clientBuilder.addInterceptor(logger);
-
-        OkHttpClient client = app.getHttpClient();
 
         Gson gson = new GsonBuilder().setLenient().create();
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(BOOKS_URL_BASE)
-                .client(client)
+                .client(clientBuilder.build())
                 .addConverterFactory(GsonConverterFactory.create(gson))
                 .build();
 
@@ -66,7 +64,7 @@ public class BooksRepo {
         if (query == null || query.trim().length() == 0 || callback == null) return;
 
         Log.e(TAG, BOOKS_URL_BASE + "?" + query);
-        Call<BookListResult> request = booksAPIwithKey.searchBooks(query);
+        Call<BookListResult> request = searchBooksAPI.searchBooks(query);
         request.enqueue(new SearchCallback(query, callback));
     }
 
@@ -137,65 +135,17 @@ public class BooksRepo {
     private void fetchBookshelf(String id, BookListCallback callback) {
         if (callback == null) return;
 
-        Log.i(TAG, "enqueing bookshelf call");
+        Log.i(TAG, "Enqueing bookshelf call to fetch ID: " + id);
 
-        Call<BookShelfResult> request = booksAPIwithToken.getBookShelf(id);
-        request.enqueue(new BookShelfResultCallback(id, callback));
-    }
-
-    private static String SELF_LINK_PREFIX = "https://www.googleapis.com/books/v1/users/";
-    private static String SELF_LINK_SUFFIX = "/bookshelves/0";
-
-    private class BookShelfResultCallback implements Callback<BookShelfResult> {
-        private String sId;
-        private BookListCallback callback;
-        public BookShelfResultCallback(String sId, BookListCallback callback) {
-            this.sId = sId;
-            this.callback = callback;
-        }
-
-        @Override
-        public void onResponse(Call<BookShelfResult> call, Response<BookShelfResult> response) {
-            if(response.isSuccessful()) {
-                BookShelfResult result = response.body();
-
-                Log.i(TAG, "good bookshelf response");
-
-                if (result != null && result.getSelfLink() != null) {
-                    String uId = null;
-                    String selfLink = result.getSelfLink();
-                    if (selfLink.startsWith(SELF_LINK_PREFIX) && selfLink.endsWith(SELF_LINK_SUFFIX)) {
-                        uId = selfLink.substring(SELF_LINK_PREFIX.length(), selfLink.length() - SELF_LINK_SUFFIX.length());
-                        Log.i(TAG, "Found " + uId + "; fetching favorites");
-                        fetchFavorites(uId, sId, callback);
-                        return;
-                    }
-                }
-            }
-            callback.call(null, Collections.emptyList(), new BooksException("Unable to find User's Books ID"));
-        }
-
-        @Override
-        public void onFailure(Call<BookShelfResult> call, Throwable t) {
-            callback.call(null, Collections.emptyList(), new BooksException("Unable to find User's Books ID"));
-        }
-    }
-
-    private void fetchFavorites(String uId, String sId, BookListCallback callback) {
-        if (callback == null) return;
-
-        Log.i(TAG, "calling findShelvedBooks " + uId + ", " + sId);
-
-        Call<BookListResult> request = booksAPIwithToken.findShelvedBooks(uId, sId);
-        request.enqueue(new FavoritesCallback(uId, sId, callback));
+        Call<BookListResult> request = favouriteBooksAPI.getBookShelf(id);
+        request.enqueue(new FavoritesCallback(id, callback));
     }
 
     private static class FavoritesCallback implements Callback<BookListResult> {
         private String uId;
         private String sId;
         private BookListCallback callback;
-        public FavoritesCallback(String uId, String sId, BookListCallback callback) {
-            this.uId = uId;
+        public FavoritesCallback(String sId, BookListCallback callback) {
             this.sId = sId;
             this.callback = callback;
         }
