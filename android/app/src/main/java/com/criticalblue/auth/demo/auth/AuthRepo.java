@@ -36,10 +36,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import io.approov.service.httpsurlconn.ApproovException;
-import io.approov.service.httpsurlconn.ApproovNetworkException;
-import io.approov.service.httpsurlconn.ApproovRejectionException;
-
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -65,36 +61,34 @@ import static com.criticalblue.auth.demo.auth.AuthEvent.AUTH_USER_INFO_START;
 
 import javax.net.ssl.HttpsURLConnection;
 
+// *** APPROOV DEPENDENCIES ***
+import io.approov.service.httpsurlconn.ApproovException;
+import io.approov.service.httpsurlconn.ApproovNetworkException;
+import io.approov.service.httpsurlconn.ApproovRejectionException;
+
 public class AuthRepo {
-    private final String TAG = AuthRepo.class.getSimpleName();
-
     BooksApp app;
+    String clientId = null;
+    String redirectUri = null;
+    String authScope = null;
 
+    private final String TAG = AuthRepo.class.getSimpleName();
     private final Semaphore loginLock;
-
-    private AuthLoginListener loginListener;
-
     private final AuthorizationService authService;
-    private AuthState authState;
-    private String userInfoUrl;
-
-    String clientId;
-    String redirectUri;
-    String authScope;
+    private AuthLoginListener loginListener = null;
+    private AuthState authState = null;
+    private String userInfoUrl = null;
 
     public AuthRepo(BooksApp app) {
         this.app = app;
-
         loginLock = new Semaphore(1);
 
-        loginListener = null;
-        authState = null;
-        userInfoUrl = null;
-        clientId = null;
-        redirectUri = null;
-        authScope = null;
+        // *** COMMENT THE TWO LINES BELOW FOR APPROOV ***
+        AppAuthConfiguration configuration = new AppAuthConfiguration.Builder().build();
+        authService = new AuthorizationService(app, configuration);
 
-        authService = new AuthorizationService(app, ApproovCustomConnection());
+        // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
+        // authService = new AuthorizationService(app, ApproovCustomConnection());
     }
 
     /**
@@ -114,12 +108,30 @@ public class AuthRepo {
                         URL url = new URL(uri.toString());
                         HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
 
-                        io.approov.service.httpsurlconn.ApproovService.addApproov(connection);
+                        // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
+                        // io.approov.service.httpsurlconn.ApproovService.addApproov(connection);
 
                         return connection;
                     }
                 })
                 .build();
+    }
+
+    /**
+     * Exchanges the OAuth2 Authorization code by an Access and ID token.
+     *
+     * Defaults to use the OAuth2 Mobile FLow, but if you are integrating Approov then you need to
+     * switch to use instead the OAuth2 Web Flow, that allows to provide a client_secret, that is
+     * securely retrieved from the Approov cloud service just-in-time of being used to make request.
+     *
+     * @param resp An instance of AuthorizationResponse with the response from the OAuth2 screen.
+     */
+    private void performCodeExchangeRequest(AuthorizationResponse resp) {
+        // *** COMMENT THE LINE BELOW FOR APPROOV ***
+        performMobileFlowTokenRequest(resp);
+
+        // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
+        // performWebFlowTokenRequest(resp);
     }
 
     /**
@@ -129,22 +141,26 @@ public class AuthRepo {
      * @link https://approov.io/docs/latest/approov-usage-documentation/#secure-strings
      *
      * @return The client secret retrieved from the Approov Cloud service
+     * @throws AuthException When fails the Mobile App Attestation or no network connectivity
      */
-    private String fetchJustInTimeClientSecret() {
-        String clientSecret = null;
+    private String fetchJustInTimeClientSecret() throws AuthException {
+        String clientSecret;
 
         try {
             clientSecret = io.approov.service.httpsurlconn.ApproovService.fetchSecureString("client_secret", null);
         } catch (ApproovRejectionException e) {
-            // failure due to the attestation being rejected, e.getARC() and e.getRejectionReasons() may be used to present information to the user
-            // (note e.getRejectionReasons() is only available if the feature is enabled, otherwise it is always an empty string)
-            failLogin(new AuthException("Failed to fetch the client_secret. ARC: " + e.getARC() + "REASON: " + e.getRejectionReasons()));
+            Log.e(TAG, "ApproovRejectionException - REASON: " + e.getRejectionReasons() + " - ARC: " + e.getARC());
+            throw new AuthException("Failed the Mobile App Attestation.");
         } catch (ApproovNetworkException e) {
-            // failure due to a potentially temporary networking issue, allow for a user initiated retry
-            failLogin(new AuthException("Failed to fetch the client_secret. Check the network connectivity and try again."));
+            Log.w(TAG, "ApproovNetworkException() - REASON: " + e.getMessage());
+            throw new AuthException("No network connectivity - Please try again.");
         } catch (ApproovException e) {
-            // a more permanent error, see e.getMessage()
-            failLogin(new AuthException("Failed to fetch the client_secret. EXCEPTION: " + e.getMessage()));
+            Log.e(TAG, "ApproovException() - REASON: " + e.getMessage());
+            throw new AuthException("Unable to perform the Mobile App Attestation.");
+        }
+
+        if (clientSecret == null) {
+            throw new AuthException("Unable to start the OAuth2 Authorization Code exchange.");
         }
 
         return clientSecret;
@@ -305,14 +321,26 @@ public class AuthRepo {
 
         AuthorizationResponse resp = authState.getLastAuthorizationResponse();
 
-        String clientSecret = fetchJustInTimeClientSecret();
+        performCodeExchangeRequest(resp);
+    }
 
-        if (clientSecret == null) {
-            failLogin(new AuthException("Failed to fetch the client_secret. Did you registered the APK with Approov?"));
+    private void performMobileFlowTokenRequest(AuthorizationResponse resp) {
+        if (resp != null) {
+            authService.performTokenRequest(
+                    resp.createTokenExchangeRequest(), this::onTokenRequestCompleted);
+        }
+    }
+
+    private void performWebFlowTokenRequest(AuthorizationResponse resp) {
+        ClientAuthentication clientAuth = null;
+
+        try {
+            clientAuth = new ClientSecretPost(fetchJustInTimeClientSecret());
+        } catch (AuthException e) {
+            Log.e(TAG, e.toString());
+            failLogin(e);
             return;
         }
-
-        ClientAuthentication clientAuth = new ClientSecretPost(clientSecret);
 
         if (resp != null) {
             authService.performTokenRequest(
@@ -498,19 +526,6 @@ public class AuthRepo {
         unlockLogins();
     }
 
-    public Interceptor getApiKeyInterceptor() {
-        return chain -> {
-            Request request = chain.request();
-
-            Log.i(TAG, "---> API Key Interceptor: " + request.url());
-
-            request = request.newBuilder()
-                    .build();
-
-            return chain.proceed(request);
-        };
-    }
-
     private String accessToken;
 
     // dangerous; do not call on UI thread.
@@ -538,6 +553,7 @@ public class AuthRepo {
 
         String token = accessToken;
         this.accessToken = null;
+
         return token;
     }
 
