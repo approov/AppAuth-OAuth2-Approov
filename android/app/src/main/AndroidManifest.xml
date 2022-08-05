@@ -34,12 +34,12 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
 
                 <!-- *** COMMENT THE LINE BELOW FOR APPROOV *** -->
-                <data android:scheme="${redirect_scheme}"/>
+<!--                <data android:scheme="${redirect_scheme}"/>-->
 
                 <!-- *** UNCOMMENT THE LINE BELOW FOR APPROOV *** -->
-                <!-- <data android:scheme="${redirect_scheme}"-->
-                <!--       android:host="${redirect_host}"-->
-                <!--       android:path="${redirect_path}" />-->
+                 <data android:scheme="${redirect_scheme}"
+                       android:host="${redirect_host}"
+                       android:path="${redirect_path}" />
             </intent-filter>
         </activity>
 

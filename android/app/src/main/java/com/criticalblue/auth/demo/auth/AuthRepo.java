@@ -2,6 +2,7 @@ package com.criticalblue.auth.demo.auth;
 
 import android.content.Intent;
 import android.net.Uri;
+import android.nfc.Tag;
 import android.os.AsyncTask;
 
 import androidx.annotation.NonNull;
@@ -58,30 +59,37 @@ import static com.criticalblue.auth.demo.auth.AuthEvent.AUTH_USER_AUTH_FINISH;
 import static com.criticalblue.auth.demo.auth.AuthEvent.AUTH_USER_AUTH_START;
 import static com.criticalblue.auth.demo.auth.AuthEvent.AUTH_USER_INFO_FINISH;
 import static com.criticalblue.auth.demo.auth.AuthEvent.AUTH_USER_INFO_START;
-q
+
 import javax.net.ssl.HttpsURLConnection;
 
 // *** APPROOV DEPENDENCIES ***
+import io.approov.service.httpsurlconn.ApproovService;
 import io.approov.service.httpsurlconn.ApproovException;
 import io.approov.service.httpsurlconn.ApproovNetworkException;
 import io.approov.service.httpsurlconn.ApproovRejectionException;
 
 public class AuthRepo {
     BooksApp app;
-    String clientId = null;
-    String redirectUri = null;
-    String authScope = null;
-
+    String clientId; // = null;
+    String redirectUri; // = null;
+    String authScope; // = null;
     private final String TAG = AuthRepo.class.getSimpleName();
     private final Semaphore loginLock;
     private final AuthorizationService authService;
-    private AuthLoginListener loginListener = null;
-    private AuthState authState = null;
-    private String userInfoUrl = null;
+    private AuthLoginListener loginListener; // = null;
+    private AuthState authState; // = null;
+    private String userInfoUrl; // = null;
 
     public AuthRepo(BooksApp app) {
         this.app = app;
         loginLock = new Semaphore(1);
+
+//        clientId = null;
+//        redirectUri = null;
+//        authScope = null;
+//        loginListener = null;
+//        authState = null;
+//        userInfoUrl = null;
 
         // *** COMMENT THE TWO LINES BELOW FOR APPROOV ***
         AppAuthConfiguration configuration = new AppAuthConfiguration.Builder().build();
@@ -109,7 +117,7 @@ public class AuthRepo {
                         HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
 
                         // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
-                        // io.approov.service.httpsurlconn.ApproovService.addApproov(connection);
+//                         ApproovService.addApproov(connection);
 
                         return connection;
                     }
@@ -128,10 +136,10 @@ public class AuthRepo {
      */
     private void performCodeExchangeRequest(AuthorizationResponse resp) {
         // *** COMMENT THE LINE BELOW FOR APPROOV ***
-        performMobileFlowTokenRequest(resp);
+        //performMobileFlowTokenRequest(resp);
 
         // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
-        // performWebFlowTokenRequest(resp);
+         performWebFlowTokenRequest(resp);
     }
 
     /**
@@ -144,26 +152,27 @@ public class AuthRepo {
      * @throws AuthException When fails the Mobile App Attestation or no network connectivity
      */
     private String fetchJustInTimeClientSecret() throws AuthException {
-        String clientSecret;
+//        String clientSecret;
 
-        try {
-            clientSecret = io.approov.service.httpsurlconn.ApproovService.fetchSecureString("client_secret", null);
-        } catch (ApproovRejectionException e) {
-            Log.e(TAG, "ApproovRejectionException - REASON: " + e.getRejectionReasons() + " - ARC: " + e.getARC());
-            throw new AuthException("Failed the Mobile App Attestation.");
-        } catch (ApproovNetworkException e) {
-            Log.w(TAG, "ApproovNetworkException() - REASON: " + e.getMessage());
-            throw new AuthException("No network connectivity - Please try again.");
-        } catch (ApproovException e) {
-            Log.e(TAG, "ApproovException() - REASON: " + e.getMessage());
-            throw new AuthException("Unable to perform the Mobile App Attestation.");
-        }
+//        try {
+//            clientSecret = io.approov.service.httpsurlconn.ApproovService.fetchSecureString("client_secret", null);
+//        } catch (ApproovRejectionException e) {
+//            Log.e(TAG, "ApproovRejectionException - REASON: " + e.getRejectionReasons() + " - ARC: " + e.getARC());
+//            throw new AuthException("Failed the Mobile App Attestation.");
+//        } catch (ApproovNetworkException e) {
+//            Log.w(TAG, "ApproovNetworkException() - REASON: " + e.getMessage());
+//            throw new AuthException("No network connectivity - Please try again.");
+//        } catch (ApproovException e) {
+//            Log.e(TAG, "ApproovException() - REASON: " + e.getMessage());
+//            throw new AuthException("Unable to perform the Mobile App Attestation.");
+//        }
+//
+//        if (clientSecret == null) {
+//            throw new AuthException("Unable to start the OAuth2 Authorization Code exchange.");
+//        }
 
-        if (clientSecret == null) {
-            throw new AuthException("Unable to start the OAuth2 Authorization Code exchange.");
-        }
-
-        return clientSecret;
+//        return clientSecret;
+        return app.getString(R.string.client_secret);
     }
 
     public boolean isConfigured() {
@@ -279,6 +288,8 @@ public class AuthRepo {
                 .setScope(authScope);
         AuthorizationRequest authRequest = authRequestBuilder.build();
 
+        Log.e(TAG, "INTENT URI: " + authRequest.toUri().toString());
+
         CustomTabsIntent.Builder intentBuilder =
                 authService.createCustomTabsIntentBuilder(authRequest.toUri());
         intentBuilder.setToolbarColor(app.getColorValue(R.color.colorAccent));
@@ -287,6 +298,7 @@ public class AuthRepo {
         Intent intent = authService.getAuthorizationRequestIntent(authRequest, authIntent);
 
         loginListener.onUserAgentRequest(AuthRepo.this, intent);
+//        startActivityForResult(intent, RC_AUTH);
     }
 
     public void notifyUserAgentResponse(Intent data, int returnCode) {

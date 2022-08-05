@@ -22,11 +22,14 @@ android {
 
         // Used to identify activity handling the redirect
         manifestPlaceholders = [
-            'redirect_scheme': "${properties.getProperty('oauth2.redirectScheme')}",
+//                'appAuthRedirectScheme': "dev.books-oauth2.demo.approov.io",
+//                'appAuthRedirectScheme': "https",
+//                'appAuthRedirectScheme': "/oauth2redirect",
+'redirect_scheme': "${properties.getProperty('oauth2.redirectScheme')}",
 
-            // Only required when using the OAuth2 Web Flow
-            'redirect_host': "${properties.getProperty('oauth2.redirectHost')}",
-            'redirect_path': "${properties.getProperty('oauth2.redirectPath')}",
+// Only required when using the OAuth2 Web Flow
+'redirect_host': "${properties.getProperty('oauth2.redirectHost')}",
+'redirect_path': "${properties.getProperty('oauth2.redirectPath')}",
         ]
 
         // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
@@ -37,6 +40,7 @@ android {
         resValue "string", "redirect_uri", "${properties.getProperty('oauth2.redirectUri')}"
 
         resValue "string", "client_id", "${properties.getProperty('google.clientId')}"
+        resValue "string", "client_secret", "${properties.getProperty('google.clientSecret')}"
         resValue "string", "authorization_scope", "${properties.getProperty('google.authorizationScope')}"
     }
 
