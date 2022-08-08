@@ -13,9 +13,6 @@ public interface BooksAPI {
     @GET("volumes/")
     Call<BookListResult> searchBooks(@Query("q") String q);
 
-    @GET("mylibrary/bookshelves/{sid}")
-    Call<BookShelfResult> getBookShelf(@Path("sid") String sid);
-
-    @GET("users/{uid}/bookshelves/{sid}/volumes")
-    Call<BookListResult> findShelvedBooks(@Path("uid") String uid, @Path("sid") String sid);
+    @GET("mylibrary/bookshelves/{sid}/volumes")
+    Call<BookListResult> getBookShelf(@Path("sid") String sid);
 }

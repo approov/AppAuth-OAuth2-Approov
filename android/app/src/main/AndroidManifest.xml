@@ -32,10 +32,14 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="${redirect_scheme}"
-                    android:path="${redirect_path}"
-                    android:host="${redirect_host}"
-                    />
+
+                <!-- *** COMMENT THE LINE BELOW FOR APPROOV *** -->
+                <data android:scheme="${redirect_scheme}"/>
+
+                <!-- *** UNCOMMENT THE LINE BELOW FOR APPROOV *** -->
+                <!-- <data android:scheme="${redirect_scheme}"-->
+                <!--       android:host="${redirect_host}"-->
+                <!--       android:path="${redirect_path}" />-->
             </intent-filter>
         </activity>
 
