@@ -1,0 +1,89 @@
+apply plugin: 'com.android.application'
+
+Properties properties = new Properties()
+if (!project.rootProject.file('local.properties').canRead()) {
+    throw new GradleException("local.properties file not found!")
+}
+
+properties.load(project.rootProject.file("local.properties").newDataInputStream())
+
+android {
+    compileSdkVersion 32
+
+    defaultConfig {
+        minSdkVersion 23
+        targetSdkVersion 32
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+
+        // used for books api (register my own)
+        applicationId "com.criticalblue.auth.demo"
+
+        // Used to identify activity handling the redirect
+        manifestPlaceholders = [
+            'redirect_scheme': "${properties.getProperty('oauth2.redirectScheme')}",
+
+            // Only required when using the OAuth2 Web Flow
+            'redirect_host': "${properties.getProperty('oauth2.redirectHost')}",
+            'redirect_path': "${properties.getProperty('oauth2.redirectPath')}",
+        ]
+
+        resValue "string", "discovery_endpoint", "${properties.getProperty('oauth2.discoveryEndpoint')}"
+        resValue "string", "user_info_endpoint", "${properties.getProperty('google.userInfoEndpoint')}"
+        resValue "string", "redirect_uri", "${properties.getProperty('oauth2.redirectUri')}"
+
+        resValue "string", "client_id", "${properties.getProperty('google.clientId')}"
+        resValue "string", "authorization_scope", "${properties.getProperty('google.authorizationScope')}"
+
+        // ONLY USED WHEN TESTING THE WEB FLOW WITHOUT APPROOV
+        resValue "string", "client_secret", "${properties.getProperty('google.clientSecret')}"
+
+        // *** UNCOMMENT THE LINE BELOW FOR APPROOV ***
+        // resValue "string", "approov_config", "${properties.getProperty('approov.config')}"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    namespace 'com.criticalblue.auth.demo'
+
+    configurations.all {
+        // resolves conflict between espresso and google api dependencies
+        resolutionStrategy.force 'com.google.code.findbugs:jsr305:1.3.9'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'androidx.appcompat:appcompat:1.5.0'
+    implementation 'androidx.recyclerview:recyclerview:1.2.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation('androidx.test.espresso:espresso-core:3.1.0', {
+        exclude group: 'com.android.support', module: 'support-annotations'
+    })
+    implementation 'androidx.lifecycle:lifecycle-runtime:2.5.1'
+    implementation 'androidx.lifecycle:lifecycle-extensions:2.2.0'
+    //noinspection LifecycleAnnotationProcessorWithJava8
+    annotationProcessor 'androidx.lifecycle:lifecycle-compiler:2.5.1'
+    implementation 'com.jakewharton:butterknife:10.0.0'
+    annotationProcessor 'com.jakewharton:butterknife-compiler:10.0.0'
+    implementation 'net.openid:appauth:0.7.0'
+    implementation 'com.google.guava:guava:24.1-jre'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.9.0'
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+    implementation 'com.squareup.picasso:picasso:2.8'
+
+    implementation 'javax.annotation:javax.annotation-api:1.3.2'
+    implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
+
+    // *** APPROOV DEPENDENCIES ***
+    // To protect the requests to the Google Books API and to ge the books images
+    implementation 'com.github.approov:approov-service-okhttp:3.0.6'
+    // To protect the OAuth2 requests made by the AppAuth library
+    implementation 'com.github.approov:approov-service-httpsurlconn:3.0.3'
+}
